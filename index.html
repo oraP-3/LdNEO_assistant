@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ドンジャラNEO ラブライブ！ 待ち牌・点数チェッカー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .playable { transition: transform 0.1s, box-shadow 0.1s; cursor: pointer; }
+        .playable:active { transform: scale(0.95); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        .rainbow-bg {
+            background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+            background-size: 200% 200%;
+            animation: rainbow 2s linear infinite;
+        }
+        @keyframes rainbow { 0% { background-position: 0% 50%; } 100% { background-position: 200% 50%; } }
+        .text-shadow-sm { text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+        
+        /* 選択時のアニメーション */
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .pop-in { animation: popIn 0.2s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-gray-800 flex flex-col h-screen overflow-hidden">
+
+<div id="app" class="max-w-3xl mx-auto w-full flex-grow flex flex-col h-full relative p-2 gap-1.5 md:gap-2">
+    
+    <!-- ヘッダー -->
+    <div class="bg-white p-2 md:p-3 rounded-lg shadow-sm flex justify-between items-center shrink-0 border-b-4 border-blue-500">
+        <div>
+            <h1 class="text-sm md:text-xl font-black text-blue-700 leading-tight">ドンジャラNEO ラブライブ！<br><span class="text-xs md:text-base text-gray-600">待ち牌・点数チェッカー</span></h1>
+        </div>
+        <button onclick="clearHand()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1.5 md:py-2 px-3 md:px-4 rounded-full text-xs md:text-sm shadow transition flex items-center gap-1 shrink-0 ml-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            全クリア
+        </button>
+    </div>
+
+    <!-- モード切替トグル -->
+    <div class="flex bg-gray-200 rounded-lg p-1 shrink-0">
+        <button id="btn-mode-hand" onclick="setInputMode('hand')" class="flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-blue-600 shadow-sm transition border-2 border-blue-400">手牌に入力</button>
+        <button id="btn-mode-visible" onclick="setInputMode('visible')" class="flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent">場見え牌（純カラ）入力</button>
+    </div>
+
+    <!-- 選択中の手牌エリア -->
+    <div id="area-hand" class="bg-white p-2 rounded-lg shadow-sm flex flex-col ring-2 ring-blue-400 transition-all shrink-0 relative overflow-hidden">
+        <!-- 誤操作防止用オーバーレイ（場見えモード時に表示） -->
+        <div id="hand-overlay" class="hidden absolute inset-0 bg-slate-200/50 z-30 backdrop-blur-[1px]"></div>
+        
+        <div class="flex justify-between items-end mb-1 relative z-40">
+            <h2 class="font-bold text-gray-700 text-xs md:text-sm flex items-center gap-2">
+                現在の手牌・鳴き牌 <span id="hand-count-badge" class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[10px] md:text-xs shadow-sm">0 / 9 枚</span>
+            </h2>
+            <span id="hand-remove-text" class="text-[9px] md:text-[10px] text-gray-500 font-bold bg-gray-200 px-1.5 py-0.5 rounded shadow-sm">タップで外す</span>
+        </div>
+        <div class="bg-slate-50 p-1 md:p-1.5 rounded border border-slate-200 flex justify-center w-full relative z-20">
+            <div id="selected-hand" class="grid grid-cols-9 gap-0.5 sm:gap-1 md:gap-2 w-full">
+                <!-- JSで生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 判定結果エリア -->
+    <div class="bg-white rounded-lg shadow-sm flex-grow flex flex-col min-h-0 overflow-hidden border-2 border-transparent" id="result-container">
+        <div class="bg-slate-800 text-white font-bold p-1.5 md:p-2 text-center text-xs md:text-sm shrink-0" id="result-header">
+            判定結果
+        </div>
+        <div id="result-body" class="flex-grow overflow-y-auto custom-scroll p-2 bg-slate-50 flex flex-col gap-2">
+            <!-- JSで生成 -->
+        </div>
+    </div>
+
+    <!-- 牌パレット（入力用） -->
+    <div id="palette-container" class="bg-white rounded-lg shadow-sm shrink-0 flex flex-col h-48 sm:h-56 md:h-64 border-t-4 border-gray-300 transition-colors duration-300">
+        <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
+            <!-- JSで生成 -->
+        </div>
+        <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1 content-start bg-slate-100">
+            <!-- JSで生成 -->
+        </div>
+    </div>
+
+    <!-- 全クリア確認用カスタムモーダル -->
+    <div id="clear-confirm-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm text-center transform scale-95 md:scale-100">
+            <div class="text-red-500 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            </div>
+            <h2 class="text-lg md:text-xl font-black text-gray-800 mb-2">全クリアの確認</h2>
+            <p class="text-sm md:text-base text-gray-600 mb-6">手牌と場見え牌（純カラ）を<br>すべてリセットしますか？</p>
+            <div class="flex justify-center gap-3">
+                <button onclick="executeClearHand()" class="bg-red-500 text-white font-bold py-2 px-6 rounded-full hover:bg-red-600 shadow-md transition">はい</button>
+                <button onclick="closeClearConfirm()" class="bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full hover:bg-gray-400 shadow-md transition">いいえ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上部トースト通知 -->
+    <div id="toast-message" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-600 text-white font-bold px-4 py-2 rounded-full shadow-lg z-[100] transition-all duration-300 -translate-y-20 opacity-0 pointer-events-none whitespace-nowrap">
+        メッセージ
+    </div>
+
+</div>
+
+<script>
+    // --- マスターデータと役定義 ---
+    const masterData = {
+        "tiles": [
+            { "id": "t01", "type": "character", "series": "muse", "characterId": "muse_honoka", "name": "高坂 穂乃果", "grade": 2, "unit": "Printemps", "birthMonth": 8, "hasSpecial": true },
+            { "id": "t02", "type": "character", "series": "muse", "characterId": "muse_eli", "name": "絢瀬 絵里", "grade": 3, "unit": "BiBi", "birthMonth": 10, "hasSpecial": false },
+            { "id": "t03", "type": "character", "series": "muse", "characterId": "muse_kotori", "name": "南 ことり", "grade": 2, "unit": "Printemps", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t04", "type": "character", "series": "muse", "characterId": "muse_umi", "name": "園田 海未", "grade": 2, "unit": "lily white", "birthMonth": 3, "hasSpecial": false },
+            { "id": "t05", "type": "character", "series": "muse", "characterId": "muse_rin", "name": "星空 凛", "grade": 1, "unit": "lily white", "birthMonth": 11, "hasSpecial": false },
+            { "id": "t06", "type": "character", "series": "muse", "characterId": "muse_maki", "name": "西木野 真姫", "grade": 1, "unit": "BiBi", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t07", "type": "character", "series": "muse", "characterId": "muse_nozomi", "name": "東條 希", "grade": 3, "unit": "lily white", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t08", "type": "character", "series": "muse", "characterId": "muse_hanayo", "name": "小泉 花陽", "grade": 1, "unit": "Printemps", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t09", "type": "character", "series": "muse", "characterId": "muse_nico", "name": "矢澤 にこ", "grade": 3, "unit": "BiBi", "birthMonth": 7, "hasSpecial": false },
+            { "id": "t10", "type": "logo", "series": "muse", "characterId": null, "name": "μ's ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t11", "type": "school", "series": "muse", "characterId": null, "name": "音ノ木坂学院 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t12", "type": "character", "series": "aqours", "characterId": "aqours_chika", "name": "高海 千歌", "grade": 2, "unit": "CYaRon!", "birthMonth": 8, "hasSpecial": true },
+            { "id": "t13", "type": "character", "series": "aqours", "characterId": "aqours_riko", "name": "桜内 梨子", "grade": 2, "unit": "Guilty Kiss", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t14", "type": "character", "series": "aqours", "characterId": "aqours_kanan", "name": "松浦 果南", "grade": 3, "unit": "AZALEA", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t15", "type": "character", "series": "aqours", "characterId": "aqours_dia", "name": "黒澤 ダイヤ", "grade": 3, "unit": "AZALEA", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t16", "type": "character", "series": "aqours", "characterId": "aqours_you", "name": "渡辺 曜", "grade": 2, "unit": "CYaRon!", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t17", "type": "character", "series": "aqours", "characterId": "aqours_yoshiko", "name": "津島 善子", "grade": 1, "unit": "Guilty Kiss", "birthMonth": 7, "hasSpecial": false },
+            { "id": "t18", "type": "character", "series": "aqours", "characterId": "aqours_hanamaru", "name": "国木田 花丸", "grade": 1, "unit": "AZALEA", "birthMonth": 3, "hasSpecial": false },
+            { "id": "t19", "type": "character", "series": "aqours", "characterId": "aqours_mari", "name": "小原 鞠莉", "grade": 3, "unit": "Guilty Kiss", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t20", "type": "character", "series": "aqours", "characterId": "aqours_ruby", "name": "黒澤 ルビィ", "grade": 1, "unit": "CYaRon!", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t21", "type": "logo", "series": "aqours", "characterId": null, "name": "Aqours ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t22", "type": "school", "series": "aqours", "characterId": null, "name": "浦の星女学院 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t23", "type": "character", "series": "nijigasaki", "characterId": "niji_yu", "name": "高咲 侑", "grade": 2, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t24", "type": "character", "series": "nijigasaki", "characterId": "niji_ayumu", "name": "上原 歩夢", "grade": 2, "unit": "A-ZU-NA", "birthMonth": 3, "hasSpecial": true },
+            { "id": "t25", "type": "character", "series": "nijigasaki", "characterId": "niji_kasumi", "name": "中須 かすみ", "grade": 1, "unit": "QU4RTZ", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t26", "type": "character", "series": "nijigasaki", "characterId": "niji_shizuku", "name": "桜坂 しずく", "grade": 1, "unit": "A-ZU-NA", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t27", "type": "character", "series": "nijigasaki", "characterId": "niji_karin", "name": "朝香 果林", "grade": 3, "unit": "DiverDiva", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t28", "type": "character", "series": "nijigasaki", "characterId": "niji_ai", "name": "宮下 愛", "grade": 2, "unit": "DiverDiva", "birthMonth": 5, "hasSpecial": false },
+            { "id": "t29", "type": "character", "series": "nijigasaki", "characterId": "niji_kanata", "name": "近江 彼方", "grade": 3, "unit": "QU4RTZ", "birthMonth": 12, "hasSpecial": false },
+            { "id": "t30", "type": "character", "series": "nijigasaki", "characterId": "niji_setsuna", "name": "優木 せつ菜", "grade": 2, "unit": "A-ZU-NA", "birthMonth": 8, "hasSpecial": false },
+            { "id": "t31", "type": "character", "series": "nijigasaki", "characterId": "niji_emma", "name": "エマ・ヴェルデ", "grade": 3, "unit": "QU4RTZ", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t32", "type": "character", "series": "nijigasaki", "characterId": "niji_rina", "name": "天王寺 璃奈", "grade": 1, "unit": "QU4RTZ", "birthMonth": 11, "hasSpecial": false },
+            { "id": "t33", "type": "character", "series": "nijigasaki", "characterId": "niji_shioriko", "name": "三船 栞子", "grade": 1, "unit": "R3BIRTH", "birthMonth": 10, "hasSpecial": false },
+            { "id": "t34", "type": "character", "series": "nijigasaki", "characterId": "niji_mia", "name": "ミア・テイラー", "grade": 3, "unit": "R3BIRTH", "birthMonth": 12, "hasSpecial": false },
+            { "id": "t35", "type": "character", "series": "nijigasaki", "characterId": "niji_lanzhu", "name": "鐘 嵐珠", "grade": 2, "unit": "R3BIRTH", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t36", "type": "logo", "series": "nijigasaki", "characterId": null, "name": "虹ヶ咲 ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t37", "type": "school", "series": "nijigasaki", "characterId": null, "name": "虹ヶ咲学園 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t38", "type": "character", "series": "liella", "characterId": "liella_kanon", "name": "澁谷 かのん", "grade": 3, "unit": "CatChu!", "birthMonth": 5, "hasSpecial": true },
+            { "id": "t39", "type": "character", "series": "liella", "characterId": "liella_keke", "name": "唐 可可", "grade": 3, "unit": "KALEIDOSCORE", "birthMonth": 7, "hasSpecial": false },
+            { "id": "t40", "type": "character", "series": "liella", "characterId": "liella_chisato", "name": "嵐 千砂都", "grade": 3, "unit": "5yncri5e!", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t41", "type": "character", "series": "liella", "characterId": "liella_sumire", "name": "平安名 すみれ", "grade": 3, "unit": "CatChu!", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t42", "type": "character", "series": "liella", "characterId": "liella_ren", "name": "葉月 恋", "grade": 3, "unit": "KALEIDOSCORE", "birthMonth": 11, "hasSpecial": false },
+            { "id": "t43", "type": "character", "series": "liella", "characterId": "liella_kinako", "name": "桜小路 きな子", "grade": 2, "unit": "5yncri5e!", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t44", "type": "character", "series": "liella", "characterId": "liella_mei", "name": "米女 メイ", "grade": 2, "unit": "CatChu!", "birthMonth": 10, "hasSpecial": false },
+            { "id": "t45", "type": "character", "series": "liella", "characterId": "liella_shiki", "name": "若菜 四季", "grade": 2, "unit": "5yncri5e!", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t46", "type": "character", "series": "liella", "characterId": "liella_natsumi", "name": "鬼塚 夏美", "grade": 2, "unit": "5yncri5e!", "birthMonth": 8, "hasSpecial": false },
+            { "id": "t47", "type": "character", "series": "liella", "characterId": "liella_wien", "name": "ウィーン・マルガレーテ", "grade": 1, "unit": "KALEIDOSCORE", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t48", "type": "character", "series": "liella", "characterId": "liella_tomari", "name": "鬼塚 冬毬", "grade": 1, "unit": "5yncri5e!", "birthMonth": 12, "hasSpecial": false },
+            { "id": "t49", "type": "logo", "series": "liella", "characterId": null, "name": "Liella! ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t50", "type": "school", "series": "liella", "characterId": null, "name": "結ヶ丘女子 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t51", "type": "character", "series": "hasunosora", "characterId": "hasu_kaho", "name": "日野下 花帆", "grade": 3, "unit": "スリーズブーケ", "birthMonth": 5, "hasSpecial": true },
+            { "id": "t52", "type": "character", "series": "hasunosora", "characterId": "hasu_sayaka", "name": "村野 さやか", "grade": 3, "unit": "DOLLCHESTRA", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t53", "type": "character", "series": "hasunosora", "characterId": "hasu_rurino", "name": "大沢 瑠璃乃", "grade": 3, "unit": "みらくらぱーく！", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t54", "type": "character", "series": "hasunosora", "characterId": "hasu_ginko", "name": "百生 吟子", "grade": 2, "unit": "スリーズブーケ", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t55", "type": "character", "series": "hasunosora", "characterId": "hasu_kosuzu", "name": "徒町 小鈴", "grade": 2, "unit": "DOLLCHESTRA", "birthMonth": 11, "hasSpecial": false },
+            { "id": "t56", "type": "character", "series": "hasunosora", "characterId": "hasu_hime", "name": "安養寺 姫芽", "grade": 2, "unit": "みらくらぱーく！", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t57", "type": "character", "series": "hasunosora", "characterId": "hasu_serasu", "name": "セラス", "grade": 1, "unit": "Edel Note", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t58", "type": "character", "series": "hasunosora", "characterId": "hasu_izumi", "name": "桂城 泉", "grade": 2, "unit": "Edel Note", "birthMonth": 12, "hasSpecial": false },
+            { "id": "t59", "type": "logo", "series": "hasunosora", "characterId": null, "name": "蓮ノ空 ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t60", "type": "school", "series": "hasunosora", "characterId": null, "name": "蓮ノ空 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t61", "type": "character", "series": "musical", "characterId": "musical_rurika", "name": "椿 ルリカ", "grade": 2, "unit": "椿咲花女子高校", "birthMonth": null, "hasSpecial": true },
+            { "id": "t62", "type": "character", "series": "musical", "characterId": "musical_yuzuha", "name": "皇 ユズハ", "grade": 2, "unit": "椿咲花女子高校", "birthMonth": null, "hasSpecial": false },
+            { "id": "t63", "type": "character", "series": "musical", "characterId": "musical_yukino", "name": "北条 ユキノ", "grade": 1, "unit": "椿咲花女子高校", "birthMonth": null, "hasSpecial": false },
+            { "id": "t64", "type": "character", "series": "musical", "characterId": "musical_hikaru", "name": "天草 ヒカル", "grade": 2, "unit": "椿咲花女子高校", "birthMonth": null, "hasSpecial": false },
+            { "id": "t65", "type": "character", "series": "musical", "characterId": "musical_maya", "name": "三笠 マーヤ", "grade": 2, "unit": "椿咲花女子高校", "birthMonth": null, "hasSpecial": false },
+            { "id": "t66", "type": "character", "series": "musical", "characterId": "musical_anzu", "name": "滝沢 アンズ", "grade": 2, "unit": "滝桜女学院", "birthMonth": null, "hasSpecial": true },
+            { "id": "t67", "type": "character", "series": "musical", "characterId": "musical_misuzu", "name": "若槻 ミスズ", "grade": 2, "unit": "滝桜女学院", "birthMonth": null, "hasSpecial": false },
+            { "id": "t68", "type": "character", "series": "musical", "characterId": "musical_toa", "name": "来栖 トア", "grade": 1, "unit": "滝桜女学院", "birthMonth": null, "hasSpecial": false },
+            { "id": "t69", "type": "character", "series": "musical", "characterId": "musical_rena", "name": "鈴賀 レナ", "grade": 2, "unit": "滝桜女学院", "birthMonth": null, "hasSpecial": false },
+            { "id": "t70", "type": "character", "series": "musical", "characterId": "musical_sayaka", "name": "晴風 サヤカ", "grade": 2, "unit": "滝桜女学院", "birthMonth": null, "hasSpecial": false },
+            { "id": "t71", "type": "logo", "series": "musical", "characterId": null, "name": "ミュージカル ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t72", "type": "school", "series": "musical", "characterId": null, "name": "椿咲花・滝桜 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t73", "type": "character", "series": "ikizulive", "characterId": "ikizu_polka", "name": "高橋 ポルカ", "grade": 1, "unit": "CHAKI!", "birthMonth": 8, "hasSpecial": true },
+            { "id": "t74", "type": "character", "series": "ikizulive", "characterId": "ikizu_mai", "name": "麻布 麻衣", "grade": 1, "unit": "CHAKI!", "birthMonth": 2, "hasSpecial": false },
+            { "id": "t75", "type": "character", "series": "ikizulive", "characterId": "ikizu_akira", "name": "五桐 玲", "grade": 1, "unit": "CHAKI!", "birthMonth": 7, "hasSpecial": false },
+            { "id": "t76", "type": "character", "series": "ikizulive", "characterId": "ikizu_hanabi", "name": "駒形 花火", "grade": 1, "unit": "CHAKI!", "birthMonth": 6, "hasSpecial": false },
+            { "id": "t77", "type": "character", "series": "ikizulive", "characterId": "ikizu_miracle", "name": "金澤 奇跡", "grade": 2, "unit": "Mi×Nori=Tea", "birthMonth": 3, "hasSpecial": false },
+            { "id": "t78", "type": "character", "series": "ikizulive", "characterId": "ikizu_noriko", "name": "調布 のりこ", "grade": 1, "unit": "Mi×Nori=Tea", "birthMonth": 4, "hasSpecial": false },
+            { "id": "t79", "type": "character", "series": "ikizulive", "characterId": "ikizu_yukuri", "name": "春宮 ゆくり", "grade": 1, "unit": "Plumina", "birthMonth": 9, "hasSpecial": false },
+            { "id": "t80", "type": "character", "series": "ikizulive", "characterId": "ikizu_aurora", "name": "此花 輝夜", "grade": 2, "unit": "Plumina", "birthMonth": 1, "hasSpecial": false },
+            { "id": "t81", "type": "character", "series": "ikizulive", "characterId": "ikizu_midori", "name": "山田 真緑", "grade": 1, "unit": "Plumina", "birthMonth": 5, "hasSpecial": false },
+            { "id": "t82", "type": "character", "series": "ikizulive", "characterId": "ikizu_shion", "name": "佐々木 翔音", "grade": 1, "unit": "SH1ON", "birthMonth": 11, "hasSpecial": false },
+            { "id": "t83", "type": "logo", "series": "ikizulive", "characterId": null, "name": "イキヅライブ ロゴ", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false },
+            { "id": "t84", "type": "school", "series": "ikizulive", "characterId": null, "name": "N高 校章", "grade": null, "unit": null, "birthMonth": null, "hasSpecial": false }
+        ],
+        "yakuDef": {
+            "unitSets": [
+                { "name": "Printemps", "score": 120000, "required": ["muse_honoka", "muse_kotori", "muse_hanayo"] },
+                { "name": "BiBi", "score": 120000, "required": ["muse_eli", "muse_maki", "muse_nico"] },
+                { "name": "lily white", "score": 120000, "required": ["muse_umi", "muse_rin", "muse_nozomi"] },
+                { "name": "CYaRon!", "score": 120000, "required": ["aqours_chika", "aqours_you", "aqours_ruby"] },
+                { "name": "AZALEA", "score": 120000, "required": ["aqours_kanan", "aqours_dia", "aqours_hanamaru"] },
+                { "name": "Guilty Kiss", "score": 120000, "required": ["aqours_riko", "aqours_yoshiko", "aqours_mari"] },
+                { "name": "A-ZU-NA", "score": 120000, "required": ["niji_ayumu", "niji_shizuku", "niji_setsuna"] },
+                { "name": "QU4RTZ", "score": 150000, "required": ["niji_kasumi", "niji_kanata", "niji_emma", "niji_rina"] },
+                { "name": "DiverDiva", "score": 90000, "required": ["niji_karin", "niji_ai"] },
+                { "name": "R3BIRTH", "score": 120000, "required": ["niji_shioriko", "niji_mia", "niji_lanzhu"] },
+                { "name": "CatChu!", "score": 120000, "required": ["liella_kanon", "liella_sumire", "liella_mei"] },
+                { "name": "5yncri5e!", "score": 180000, "required": ["liella_chisato", "liella_kinako", "liella_shiki", "liella_natsumi", "liella_tomari"] },
+                { "name": "KALEIDOSCORE", "score": 120000, "required": ["liella_keke", "liella_ren", "liella_wien"] },
+                { "name": "スリーズブーケ", "score": 90000, "required": ["hasu_kaho", "hasu_ginko"] },
+                { "name": "DOLLCHESTRA", "score": 90000, "required": ["hasu_sayaka", "hasu_kosuzu"] },
+                { "name": "みらくらぱーく！", "score": 90000, "required": ["hasu_rurino", "hasu_hime"] },
+                { "name": "Edel Note", "score": 90000, "required": ["hasu_serasu", "hasu_izumi"] },
+                { "name": "CHAKI!", "score": 150000, "required": ["ikizu_polka", "ikizu_mai", "ikizu_akira", "ikizu_hanabi"] },
+                { "name": "Mi×Nori=Tea", "score": 90000, "required": ["ikizu_miracle", "ikizu_noriko"] },
+                { "name": "Plumina", "score": 120000, "required": ["ikizu_midori", "ikizu_aurora", "ikizu_yukuri"] },
+                { "name": "椿咲花女子高校", "score": 180000, "required": ["musical_rurika", "musical_yuzuha", "musical_yukino", "musical_hikaru", "musical_maya"] },
+                { "name": "滝桜女学院", "score": 180000, "required": ["musical_anzu", "musical_misuzu", "musical_toa", "musical_rena", "musical_sayaka"] },
+                { "name": "AiScReam", "score": 60000, "required": ["aqours_ruby", "niji_ayumu", "liella_shiki", "hasu_serasu", "ikizu_mai"], "requiredCount": 3 },
+                { "name": "わいわいわい", "score": 120000, "required": ["aqours_you", "aqours_yoshiko", "aqours_ruby"] },
+                { "name": "Ruri&To", "score": 60000, "required": ["hasu_sayaka", "hasu_rurino", "hasu_kosuzu", "hasu_serasu"] },
+                { "name": "PRINCEε>ε>", "score": 60000, "required": ["hasu_kaho", "hasu_ginko", "hasu_hime", "hasu_izumi"] },
+                { "name": "にこりんぱな", "score": 120000, "required": ["muse_rin", "muse_hanayo", "muse_nico"] },
+                { "name": "クーカー", "score": 90000, "required": ["liella_kanon", "liella_keke"] },
+                { "name": "トマカノーテ", "score": 120000, "required": ["liella_kanon", "liella_wien", "liella_tomari"] },
+                { "name": "ぐーりんぱ", "score": 120000, "required": ["aqours_chika", "aqours_dia", "aqours_yoshiko"] }
+            ],
+            "gradeSets": [
+                { "name": "1年生セット", "grade": 1, "score": 60000, "requiredCount": 5 },
+                { "name": "2年生セット", "grade": 2, "score": 60000, "requiredCount": 5 },
+                { "name": "3年生セット", "grade": 3, "score": 60000, "requiredCount": 5 },
+                { "name": "1年生コンプ", "grade": 1, "score": 360000, "requiredCount": 9 },
+                { "name": "2年生コンプ", "grade": 2, "score": 360000, "requiredCount": 9 },
+                { "name": "3年生コンプ", "grade": 3, "score": 360000, "requiredCount": 9 }
+            ],
+            "birthMonthSets": [
+                { "name": "1月生まれセット", "month": 1, "score": 60000, "requiredCount": 3 },
+                { "name": "2月生まれセット", "month": 2, "score": 60000, "requiredCount": 3 },
+                { "name": "3月生まれセット", "month": 3, "score": 120000, "requiredCount": 3 },
+                { "name": "4月生まれセット", "month": 4, "score": 60000, "requiredCount": 3 },
+                { "name": "5月生まれセット", "month": 5, "score": 120000, "requiredCount": 3 },
+                { "name": "6月生まれセット", "month": 6, "score": 60000, "requiredCount": 3 },
+                { "name": "7月生まれセット", "month": 7, "score": 120000, "requiredCount": 3 },
+                { "name": "8月生まれセット", "month": 8, "score": 120000, "requiredCount": 3 },
+                { "name": "9月生まれセット", "month": 9, "score": 60000, "requiredCount": 3 },
+                { "name": "10月生まれセット", "month": 10, "score": 120000, "requiredCount": 3 },
+                { "name": "11月生まれセット", "month": 11, "score": 120000, "requiredCount": 3 },
+                { "name": "12月生まれセット", "month": 12, "score": 120000, "requiredCount": 3 }
+            ]
+        }
+    };
+
+    const seriesColors = {
+        "muse": "bg-pink-50 border-pink-400 text-pink-800", 
+        "aqours": "bg-blue-50 border-blue-400 text-blue-800",
+        "nijigasaki": "bg-yellow-50 border-yellow-400 text-yellow-900", 
+        "liella": "bg-purple-50 border-purple-400 text-purple-800",
+        "hasunosora": "bg-rose-50 border-rose-400 text-rose-800", 
+        "musical": "bg-red-50 border-red-400 text-red-800",
+        "ikizulive": "bg-green-50 border-green-400 text-green-800"
+    };
+
+    const seriesNames = {
+        "muse": "μ's", "aqours": "Aqours", "nijigasaki": "ニジガク", 
+        "liella": "Liella!", "hasunosora": "蓮ノ空", "musical": "スクミュ", "ikizulive": "イキヅ"
+    };
+
+    // --- 状態管理 ---
+    let selectedHand = [];    // 手牌 (最大9枚)
+    let visibleTiles = [];   // 場見え牌 (制限なし)
+    let activeTab = "muse";
+    let inputMode = "hand";  // 'hand' | 'visible'
+
+    // --- ロジック関数 ---
+    function getShortName(fullName) {
+        const shortNames = {
+            "μ's ロゴ": "μ's", "Aqours ロゴ": "Aqours", "虹ヶ咲 ロゴ": "ニジガク",
+            "Liella! ロゴ": "Liella", "ミュージカル ロゴ": "スクミュ", "蓮ノ空 ロゴ": "蓮ノ空",
+            "イキヅライブ ロゴ": "イキヅ", "イキヅライブ！ ロゴ": "イキヅ",
+            "音ノ木坂学院 校章": "音ノ木", "浦の星女学院 校章": "浦女", "虹ヶ咲学園 校章": "虹ヶ咲",
+            "結ヶ丘女子 校章": "結女", "結ヶ丘女子高等学校 校章": "結女",
+            "椿咲花・滝桜 校章": "椿滝桜", "蓮ノ空 校章": "蓮ノ空", "蓮ノ空女学院 校章": "蓮女",
+            "N高 校章": "N高",
+            "エマ・ヴェルデ": "エマ", "ミア・テイラー": "ミア", "ウィーン・マルガレーテ": "ウィーン",
+            "セラス 柳田 リリエンフェルト": "セラス"
+        };
+        if (shortNames[fullName]) return shortNames[fullName];
+        const parts = fullName.split(' ');
+        return parts[parts.length - 1]; 
+    }
+
+    function getMonthOrSchoolText(tile) {
+        if (tile.birthMonth) return `${tile.birthMonth}月`;
+        if (tile.series === 'musical') {
+            if (tile.unit === '椿咲花女子高校') return '椿';
+            if (tile.unit === '滝桜女学院') return '滝桜';
+        }
+        return "";
+    }
+
+    function evaluateHand(handArray) {
+        let allTiles = [...handArray];
+        if (allTiles.length !== 9) return { canAgari: false, reason: "length" };
+
+        let totalScore = 0;
+        let hasBasicYaku = false;
+        let bonusYakuCount = 0;
+        let satisfiedYaku = [];
+
+        let seriesInfo = {};
+        allTiles.forEach(t => {
+            if (!seriesInfo[t.series]) seriesInfo[t.series] = { chars: 0, almighties: 0 };
+            if (t.type === 'character') seriesInfo[t.series].chars++;
+            else seriesInfo[t.series].almighties++;
+        });
+
+        let setsOfThree = 0;
+        let isOneSeries = false;
+
+        Object.values(seriesInfo).forEach(info => {
+            const total = info.chars + info.almighties;
+            if (total === 9) isOneSeries = true;
+
+            const maxSetsByTotal = Math.floor(total / 3);
+            const maxSetsByChars = Math.floor(info.chars / 2); 
+            setsOfThree += Math.min(maxSetsByTotal, maxSetsByChars);
+        });
+
+        if (isOneSeries) {
+            hasBasicYaku = true;
+            satisfiedYaku.push({ name: "1シリーズセット", score: 420000 });
+            totalScore += 420000;
+        } else if (setsOfThree >= 3) {
+            hasBasicYaku = true;
+            satisfiedYaku.push({ name: "3シリーズセット", score: 60000 });
+            totalScore += 60000;
+        }
+
+        if (!hasBasicYaku) return { canAgari: false, reason: "basic" };
+
+        const handCharIds = allTiles.map(t => t.characterId).filter(id => id != null);
+        masterData.yakuDef.unitSets.forEach(unit => {
+            const matchCount = unit.required.filter(reqId => handCharIds.includes(reqId)).length;
+            const neededCount = unit.requiredCount || unit.required.length;
+            if (matchCount >= neededCount) {
+                satisfiedYaku.push({ name: `${unit.name}セット`, score: unit.score });
+                totalScore += unit.score;
+                bonusYakuCount++;
+            }
+        });
+
+        let gradeCounts = { 1:0, 2:0, 3:0 };
+        allTiles.forEach(t => { if(t.grade) gradeCounts[t.grade]++; });
+        [1, 2, 3].forEach(g => {
+            if (gradeCounts[g] >= 9) {
+                satisfiedYaku.push({ name: `${g}年生コンプ`, score: 360000 });
+                totalScore += 360000;
+                bonusYakuCount++;
+            } else if (gradeCounts[g] >= 5) {
+                satisfiedYaku.push({ name: `${g}年生セット`, score: 60000 });
+                totalScore += 60000;
+                bonusYakuCount++;
+            }
+        });
+
+        let monthCounts = {};
+        allTiles.forEach(t => { if(t.birthMonth) monthCounts[t.birthMonth] = (monthCounts[t.birthMonth] || 0) + 1; });
+        Object.keys(monthCounts).forEach(m => {
+            if (monthCounts[m] >= 3) {
+                const score = ['3','5','7','8','10','11','12'].includes(m) ? 120000 : 60000;
+                satisfiedYaku.push({ name: `${m}月生まれセット`, score: score });
+                totalScore += score;
+                bonusYakuCount++;
+            }
+        });
+
+        if (bonusYakuCount === 0) return { canAgari: false, reason: "bonus" };
+
+        return { canAgari: true, yaku: satisfiedYaku, totalScore: totalScore };
+    }
+
+    function checkMachi(base8Tiles, excludeTileIds = []) {
+        let machiGroups = {};
+        let totalMachiTypes = 0;
+        let availableCount = 0;
+
+        for (let j = 0; j < masterData.tiles.length; j++) {
+            let candidateTile = masterData.tiles[j];
+            
+            // 既に手牌にある牌は待ちとしてあり得ないため除外
+            if (base8Tiles.some(t => t.id === candidateTile.id)) continue;
+            
+            // 明示的に除外指定された牌（捨て牌自身）を除外
+            if (excludeTileIds.includes(candidateTile.id)) continue;
+            
+            let testHand = [...base8Tiles, candidateTile];
+            let agariRes = evaluateHand(testHand);
+            
+            if (agariRes.canAgari) {
+                totalMachiTypes++;
+                const yakuText = agariRes.yaku.map(y=>y.name).join(', ');
+                const score = agariRes.totalScore;
+                const key = `${score}_${yakuText}`;
+                
+                // 場見え牌に存在すれば純カラ（出アガリ不可）とする
+                const isJunkara = visibleTiles.some(t => t.id === candidateTile.id);
+                
+                if (!isJunkara) {
+                    availableCount++;
+                }
+
+                if (!machiGroups[key]) {
+                    machiGroups[key] = {
+                        score: score,
+                        yakuText: yakuText,
+                        tiles: []
+                    };
+                }
+                if(!machiGroups[key].tiles.some(t => t.tile.id === candidateTile.id)) {
+                    machiGroups[key].tiles.push({ tile: candidateTile, isJunkara: isJunkara });
+                }
+            }
+        }
+        
+        let resultList = Object.values(machiGroups);
+        resultList.sort((a, b) => b.score - a.score);
+        return { count: totalMachiTypes, availableCount: availableCount, groups: resultList };
+    }
+
+
+    // --- UI表示用補助関数 ---
+    let toastTimer = null;
+    function showToast(message) {
+        const toast = document.getElementById('toast-message');
+        toast.innerText = message;
+        toast.classList.remove('-translate-y-20', 'opacity-0');
+        toast.classList.add('translate-y-0', 'opacity-100');
+        
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            toast.classList.remove('translate-y-0', 'opacity-100');
+            toast.classList.add('-translate-y-20', 'opacity-0');
+        }, 2500);
+    }
+
+
+    // --- UI生成関数 ---
+    
+    // パレット用の標準サイズの牌
+    function createTileHTML(tile, onClickHTML = "", extraClasses = "", overlayHTML = "") {
+        const clickableClass = onClickHTML ? "playable" : "";
+        const seriesBorder = seriesColors[tile.series].split(' ')[1]; 
+        
+        let html = `<div class="border-2 ${seriesBorder} rounded w-[48px] sm:w-[52px] md:w-16 h-[68px] sm:h-[74px] md:h-24 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
+        html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
+        
+        if (tile.grade) {
+            html += `<span class="absolute top-0 left-0.5 font-bold z-10 text-[8px] md:text-[10px] text-gray-700 whitespace-nowrap">${tile.grade}年</span>`;
+        }
+        
+        const topRightText = getMonthOrSchoolText(tile);
+        if (topRightText) {
+            html += `<span class="absolute top-0 right-0.5 z-10 text-[8px] md:text-[10px] text-gray-700 whitespace-nowrap font-bold">${topRightText}</span>`;
+        }
+        
+        let displayName = tile.name;
+        if (displayName === "セラス 柳田 リリエンフェルト") displayName = "セラス<br>柳田<br>リリエンフェルト";
+        else if (displayName.includes(' ')) displayName = displayName.split(' ').join('<br>');
+        else if (displayName.includes('・')) displayName = displayName.replace('・', '・<br>');
+        
+        html += `<div class="flex-grow flex items-center justify-center w-full z-10 mt-3 mb-0.5 px-0.5 overflow-hidden">`;
+        html += `<span class="font-bold text-center break-words leading-tight text-[8px] sm:text-[9px] md:text-sm">${displayName}</span>`;
+        html += `</div>`;
+
+        html += overlayHTML;
+        html += `</div>`;
+        return html;
+    }
+
+    // 手牌エリア用のコンパクトな牌
+    function createCompactTileHTML(tile, onClickHTML = "", extraClasses = "", monthCount = 0, gradeCount = 0, musicalCount = 0, unitStatus = { complete: [], reach: [] }) {
+        const clickableClass = onClickHTML ? "playable" : "";
+        const seriesBorder = seriesColors[tile.series].split(' ')[1];
+        const seriesBg = seriesColors[tile.series].split(' ')[0];
+        
+        let html = `<div class="border-2 sm:border ${seriesBorder} rounded w-full aspect-[2/3] shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses} overflow-hidden" ${onClickHTML}>`;
+        html += `<div class="absolute inset-0 opacity-40 ${seriesBg} pointer-events-none"></div>`;
+        
+        // 学年ハイライト
+        let gradeClass = "text-gray-700"; let gradeBg = "";
+        if (gradeCount === 4) {
+            gradeClass = "text-yellow-900"; gradeBg = "bg-yellow-300 rounded px-1 shadow-[0_0_8px_rgba(250,204,21,1)] z-20 -ml-0.5";
+        } else if (gradeCount >= 5 && gradeCount < 9) {
+            gradeClass = "text-white"; gradeBg = "bg-red-500 rounded px-1 shadow-[0_0_8px_rgba(239,68,68,1)] z-20 -ml-0.5";
+        } else if (gradeCount >= 9) {
+            gradeClass = "text-white text-shadow-sm"; gradeBg = "rainbow-bg rounded px-1 shadow-[0_0_12px_rgba(255,255,255,0.8)] z-20 -ml-0.5";
+        }
+
+        if (tile.grade) {
+            html += `<span class="absolute top-0 left-0 font-bold z-10 text-[7px] sm:text-[9px] whitespace-nowrap scale-90 origin-top-left ${gradeClass} ${gradeBg}">${tile.grade}年</span>`;
+        }
+        
+        // 月/学校ハイライト
+        let rightBadgeClass = "text-gray-700"; let rightBadgeBg = "";
+        let isRightYellow = false; let isRightRed = false;
+
+        if (tile.birthMonth) {
+            if (monthCount === 2) isRightYellow = true;
+            else if (monthCount >= 3) isRightRed = true;
+        } else if (tile.series === 'musical') {
+            if (musicalCount === 4) isRightYellow = true;
+            else if (musicalCount >= 5) isRightRed = true;
+        }
+
+        if (isRightYellow) {
+            rightBadgeClass = "text-yellow-900"; rightBadgeBg = "bg-yellow-300 rounded px-1 shadow-[0_0_8px_rgba(250,204,21,1)] z-20 -mr-0.5";
+        } else if (isRightRed) {
+            rightBadgeClass = "text-white"; rightBadgeBg = "bg-red-500 rounded px-1 shadow-[0_0_8px_rgba(239,68,68,1)] z-20 -mr-0.5";
+        }
+
+        const topRightText = getMonthOrSchoolText(tile);
+        if (topRightText) {
+            html += `<span class="absolute top-0 right-0 z-10 text-[7px] sm:text-[9px] whitespace-nowrap font-bold scale-90 origin-top-right ${rightBadgeClass} ${rightBadgeBg}">${topRightText}</span>`;
+        }
+        
+        const shortName = getShortName(tile.name);
+        
+        html += `<div class="flex-grow flex items-center justify-center w-full z-10 px-[1px] mt-2.5 sm:mt-3 pb-1">`;
+        html += `<span class="font-bold text-center break-all sm:break-words leading-tight text-[8px] sm:text-[10px] md:text-xs">${shortName}</span>`;
+        html += `</div>`;
+
+        // ユニット状態ハイライト
+        html += `<div class="w-full flex flex-col items-center justify-end gap-[1px] z-10 min-h-[8px] pb-0.5 px-0.5">`;
+        if (unitStatus.complete.length > 0 || unitStatus.reach.length > 0) {
+            unitStatus.complete.forEach(u => html += `<span class="bg-red-500 text-white text-[5px] sm:text-[6px] font-bold rounded w-full text-center truncate leading-[1.2] shadow-sm">${u}</span>`);
+            unitStatus.reach.forEach(u => html += `<span class="bg-yellow-300 text-yellow-900 text-[5px] sm:text-[6px] font-bold rounded w-full text-center truncate leading-[1.2] shadow-sm">${u}</span>`);
+        }
+        html += `</div></div>`;
+        return html;
+    }
+
+    // 待ち候補用の横長タイル
+    function createSmallTileHTML(tile, isJunkara = false, onClickHTML = "") {
+        const shortName = getShortName(tile.name);
+        const gradeText = tile.grade ? `${tile.grade}年` : "";
+        const monthText = getMonthOrSchoolText(tile);
+        
+        const subInfoHTML = (gradeText || monthText) ? `
+            <div class="flex flex-col items-center justify-center text-[6px] md:text-[7px] leading-[1.1] shrink-0 ml-auto pl-1 border-l border-gray-300/50">
+                ${gradeText ? `<span>${gradeText}</span>` : ""}
+                ${monthText ? `<span>${monthText}</span>` : ""}
+            </div>
+        ` : "";
+
+        const colorClasses = `bg-white border ${seriesColors[tile.series].split(' ')[1]} ${seriesColors[tile.series].split(' ')[2]}`;
+        
+        let wrapClass = "relative flex items-center h-6 md:h-8 px-1 md:px-2 rounded shadow-sm border " + colorClasses;
+        if (isJunkara) wrapClass += " opacity-50 grayscale";
+        if (onClickHTML) wrapClass += " cursor-pointer hover:scale-105 transition";
+
+        let badge = "";
+        if (isJunkara) {
+            badge = `<div class="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-gray-600 text-white text-[7px] font-bold px-1 rounded-full border border-white z-10 scale-90 shadow-sm whitespace-nowrap">0枚</div>`;
+        }
+
+        return `
+            <div class="${wrapClass} w-max shrink-0 mt-2 mr-1" ${onClickHTML}>
+                <span class="font-bold text-[9px] md:text-[11px] truncate leading-none mr-1">${shortName}</span>
+                ${subInfoHTML}
+                ${badge}
+            </div>
+        `;
+    }
+
+
+    // --- アクション制御 ---
+    window.setInputMode = function(mode) {
+        inputMode = mode;
+        
+        const btnHand = document.getElementById('btn-mode-hand');
+        const btnVisible = document.getElementById('btn-mode-visible');
+        const areaHand = document.getElementById('area-hand');
+        const paletteContainer = document.getElementById('palette-container');
+        const handOverlay = document.getElementById('hand-overlay');
+        const handRemoveText = document.getElementById('hand-remove-text');
+
+        if (mode === 'hand') {
+            btnHand.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-blue-600 shadow-sm transition border-2 border-blue-400";
+            btnVisible.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
+            
+            areaHand.classList.add('ring-2', 'ring-blue-400');
+            paletteContainer.classList.replace('border-red-400', 'border-gray-300');
+            
+            handOverlay.classList.add('hidden');
+            handRemoveText.innerText = "タップで外す";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-gray-500 font-bold bg-gray-200 px-1.5 py-0.5 rounded shadow-sm";
+        } else {
+            btnHand.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
+            btnVisible.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-red-600 shadow-sm transition border-2 border-red-400";
+            
+            areaHand.classList.remove('ring-2', 'ring-blue-400');
+            paletteContainer.classList.replace('border-gray-300', 'border-red-400');
+            
+            handOverlay.classList.remove('hidden');
+            handRemoveText.innerText = "※編集中はロック";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded";
+        }
+        
+        renderHand(); 
+        renderPalette(); 
+    };
+
+    window.addTile = function(tileId) {
+        const isHand = selectedHand.some(t => t.id === tileId);
+        const isVisible = visibleTiles.some(t => t.id === tileId);
+
+        if (inputMode === 'hand') {
+            if (isHand || isVisible) return; 
+            if (selectedHand.length >= 9) {
+                showToast("手牌は最大9枚までです");
+                return;
+            }
+            const tile = masterData.tiles.find(t => t.id === tileId);
+            selectedHand.push(tile);
+            selectedHand.sort((a, b) => a.id.localeCompare(b.id));
+        } else {
+            // 場見え牌（純カラ）モード
+            if (isHand) return; 
+            if (isVisible) {
+                // レッドアウト解除
+                visibleTiles = visibleTiles.filter(t => t.id !== tileId);
+            } else {
+                // レッドアウト追加
+                const tile = masterData.tiles.find(t => t.id === tileId);
+                visibleTiles.push(tile);
+                visibleTiles.sort((a, b) => a.id.localeCompare(b.id));
+            }
+        }
+        
+        renderApp();
+        renderPalette(); 
+    };
+
+    window.removeTileFromHand = function(index) {
+        selectedHand.splice(index, 1);
+        renderApp();
+        renderPalette(); 
+    };
+
+    window.clearHand = function() {
+        if((selectedHand.length > 0 || visibleTiles.length > 0)) {
+            document.getElementById('clear-confirm-modal').classList.remove('hidden');
+        }
+    };
+
+    window.executeClearHand = function() {
+        selectedHand = [];
+        visibleTiles = [];
+        setInputMode('hand'); // ★追加: クリア後にデフォルトの手牌入力モードに戻す
+        renderApp();
+        renderPalette(); 
+        document.getElementById('clear-confirm-modal').classList.add('hidden');
+    };
+
+    window.closeClearConfirm = function() {
+        document.getElementById('clear-confirm-modal').classList.add('hidden');
+    };
+
+    window.switchTab = function(seriesKey) {
+        activeTab = seriesKey;
+        renderTabs();
+        renderPalette();
+    };
+
+
+    // --- 描画ロジック ---
+    function renderApp() {
+        renderHand();
+        renderResult();
+        
+        const handBadge = document.getElementById('hand-count-badge');
+        handBadge.innerText = `${selectedHand.length} / 9 枚`;
+        if(selectedHand.length >= 9) {
+            handBadge.classList.replace('bg-blue-100', 'bg-red-100');
+            handBadge.classList.replace('text-blue-800', 'text-red-800');
+        } else {
+            handBadge.classList.replace('bg-red-100', 'bg-blue-100');
+            handBadge.classList.replace('text-red-800', 'text-blue-800');
+        }
+    }
+
+    function renderHand() {
+        const container = document.getElementById('selected-hand');
+        if (selectedHand.length === 0) {
+            container.innerHTML = `<div class="col-span-9 text-gray-400 text-xs md:text-sm font-bold w-full text-center py-3">パレットから選択してください<br>（鳴き牌も含めて入力）</div>`;
+            return;
+        }
+
+        const monthCounts = {}; const gradeCounts = {}; const musicalCounts = {}; 
+        const handCharIds = selectedHand.map(t => t.characterId).filter(id => id != null);
+        
+        selectedHand.forEach(t => {
+            if (t.birthMonth) monthCounts[t.birthMonth] = (monthCounts[t.birthMonth] || 0) + 1;
+            if (t.grade) gradeCounts[t.grade] = (gradeCounts[t.grade] || 0) + 1;
+            if (t.series === 'musical') {
+                const school = getMonthOrSchoolText(t);
+                if (school) musicalCounts[school] = (musicalCounts[school] || 0) + 1;
+            }
+        });
+
+        const unitStatusMap = {};
+        masterData.yakuDef.unitSets.forEach(unit => {
+            const matchCount = unit.required.filter(reqId => handCharIds.includes(reqId)).length;
+            const neededCount = unit.requiredCount || unit.required.length;
+            const isComplete = matchCount >= neededCount;
+            const isReach = matchCount === neededCount - 1 && neededCount > 1;
+
+            if (isComplete || isReach) {
+                unit.required.forEach(reqId => {
+                    if (handCharIds.includes(reqId)) {
+                        if (!unitStatusMap[reqId]) unitStatusMap[reqId] = { complete: [], reach: [] };
+                        if (isComplete) unitStatusMap[reqId].complete.push(unit.name);
+                        else unitStatusMap[reqId].reach.push(unit.name);
+                    }
+                });
+            }
+        });
+
+        let html = '';
+        selectedHand.forEach((tile, idx) => {
+            const mCount = tile.birthMonth ? monthCounts[tile.birthMonth] : 0;
+            const gCount = tile.grade ? gradeCounts[tile.grade] : 0;
+            const musCount = tile.series === 'musical' ? musicalCounts[getMonthOrSchoolText(tile)] : 0;
+            const uStatus = tile.characterId ? (unitStatusMap[tile.characterId] || { complete: [], reach: [] }) : { complete: [], reach: [] };
+
+            let onClick = "";
+            let extraClasses = "pop-in";
+            
+            if (inputMode === 'hand') {
+                onClick = `onclick="window.removeTileFromHand(${idx})"`;
+                extraClasses += " hover:scale-105 cursor-pointer";
+            } else {
+                extraClasses += " opacity-50 grayscale";
+            }
+
+            html += createCompactTileHTML(tile, onClick, extraClasses, mCount, gCount, musCount, uStatus);
+        });
+        
+        for(let i = selectedHand.length; i < 9; i++) {
+            html += `<div class="w-full aspect-[2/3] border-2 border-dashed border-gray-300 rounded flex items-center justify-center shrink-0 opacity-50 bg-gray-100"></div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function renderResult() {
+        const header = document.getElementById('result-header');
+        const body = document.getElementById('result-body');
+
+        if (selectedHand.length < 8) {
+            header.className = "bg-slate-800 text-white font-bold p-1.5 md:p-2 text-center text-xs md:text-sm shrink-0";
+            header.innerText = "判定結果";
+            body.innerHTML = `<div class="h-full flex items-center justify-center text-gray-400 text-xs md:text-sm text-center">手牌を8枚（待ち確認）<br>または9枚（アガリ確認）選択すると<br>ここに結果が表示されます</div>`;
+            return;
+        }
+
+        if (selectedHand.length === 8) {
+            // 待ち牌判定
+            const machiData = checkMachi(selectedHand);
+            
+            let badgeText = `残り ${machiData.availableCount} 枚`;
+            if (machiData.count > 0 && machiData.availableCount === 0) {
+                badgeText = `残り 0 枚 (純カラ)`;
+            }
+            let badgeClass = machiData.availableCount > 0 ? "bg-blue-800" : "bg-red-500";
+            
+            header.className = "bg-blue-600 text-white font-bold p-1.5 md:p-2 text-center text-xs md:text-sm shrink-0 flex justify-between px-4";
+            header.innerHTML = `<span>待ち牌確認（8枚）</span> <span class="${badgeClass} px-2 rounded-full shadow-sm">${badgeText}</span>`;
+            
+            if (machiData.groups.length === 0) {
+                body.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-red-500 font-bold text-center gap-2">
+                    <span class="text-4xl">💦</span>
+                    アガれる待ち牌はありません。<br>（役がない、または基本セット条件を満たしていません）
+                </div>`;
+            } else {
+                let html = "";
+                machiData.groups.forEach(g => {
+                    const hasAvailable = g.tiles.some(t => !t.isJunkara);
+                    const groupBgClass = hasAvailable ? "bg-white border-blue-400" : "bg-gray-100 border-gray-300 opacity-90";
+                    const scoreColor = hasAvailable ? "text-red-600" : "text-gray-500";
+
+                    g.tiles.sort((a, b) => {
+                        return (a.isJunkara === b.isJunkara) ? 0 : a.isJunkara ? 1 : -1;
+                    });
+
+                    let tilesHtml = `<div class="flex flex-wrap gap-x-1 mt-1">`;
+                    g.tiles.forEach(tObj => { tilesHtml += createSmallTileHTML(tObj.tile, tObj.isJunkara); });
+                    tilesHtml += `</div>`;
+
+                    html += `
+                    <div class="${groupBgClass} p-2 rounded shadow-sm border-l-4 flex flex-col shrink-0">
+                        <div class="flex justify-between items-end border-b border-gray-200 pb-1 mb-1">
+                            <div class="text-sm md:text-lg font-black ${scoreColor} leading-none">
+                                ${g.score.toLocaleString()} ジャラ 
+                                ${!hasAvailable ? '<span class="text-[8px] bg-gray-500 text-white px-1 py-0.5 rounded align-middle ml-1">出アガリ不可</span>' : ''}
+                            </div>
+                            <div class="text-[9px] md:text-xs text-gray-600 font-bold ml-2 text-right">${g.yakuText}</div>
+                        </div>
+                        ${tilesHtml}
+                    </div>
+                    `;
+                });
+                body.innerHTML = html;
+            }
+        } else if (selectedHand.length === 9) {
+            // アガリ判定 ＆ 理牌アシスト
+            const res = evaluateHand(selectedHand);
+            const currentScore = res.canAgari ? res.totalScore : 0;
+            
+            let agariHtml = "";
+            if (res.canAgari) {
+                header.className = "bg-red-600 text-white font-bold p-1.5 md:p-2 text-center text-xs md:text-sm shrink-0 flex justify-between px-4";
+                header.innerHTML = `<span>アガリ成立！</span>`;
+                
+                let yakuList = res.yaku.map(y => `<li class="ml-4 list-disc">${y.name} (${y.score.toLocaleString()})</li>`).join('');
+                agariHtml = `
+                    <div class="bg-yellow-50 p-2 md:p-3 rounded shadow-sm border-2 border-yellow-400 text-center flex flex-col items-center mb-2 md:mb-4">
+                        <div class="text-2xl md:text-3xl font-black text-red-600 mb-1 md:mb-2 drop-shadow-sm">${res.totalScore.toLocaleString()} ジャラ</div>
+                        <ul class="text-xs md:text-sm text-gray-700 font-bold text-left bg-white px-4 py-2 rounded border border-yellow-200 inline-block w-full">
+                            ${yakuList}
+                        </ul>
+                    </div>
+                `;
+            } else {
+                header.className = "bg-gray-600 text-white font-bold p-1.5 md:p-2 text-center text-xs md:text-sm shrink-0";
+                header.innerHTML = `<span>アガリ不成立</span>`;
+                
+                let reasonText = "現在の手牌ではアガれません。";
+                if (res.reason === "basic") {
+                    reasonText = "基本役（3シリーズセット、または<br>1シリーズセット）が完成していません。";
+                } else if (res.reason === "bonus") {
+                    reasonText = "基本役は完成していますが、<br>加点役（ユニット、学年など）がありません。<br><span class='text-[10px] text-red-500 mt-1 inline-block'>※アガるには加点役が1つ以上必要です</span>";
+                }
+
+                agariHtml = `
+                    <div class="bg-gray-100 p-2 rounded text-center text-gray-600 font-bold mb-2 border border-gray-300">
+                        ${reasonText}
+                    </div>
+                `;
+            }
+
+            // 何を切れば何待ちになるか計算
+            let assistHtml = `<div class="font-bold text-gray-700 text-xs md:text-sm mb-1.5 border-b-2 border-gray-300 pb-0.5">どれか1枚を捨てた場合の待ち牌候補</div>`;
+            
+            let testedTileIds = new Set();
+            let candidates = [];
+
+            selectedHand.forEach((discardCandidate, idx) => {
+                if(testedTileIds.has(discardCandidate.id)) return;
+                testedTileIds.add(discardCandidate.id);
+
+                let testHand8 = [...selectedHand];
+                testHand8.splice(idx, 1);
+                
+                const machiData = checkMachi(testHand8, [discardCandidate.id]);
+
+                if(machiData.count > 0) {
+                    let maxScore = 0;
+                    let hasAvailableMachi = false;
+                    machiData.groups.forEach(g => {
+                        if (g.tiles.some(t => !t.isJunkara)) {
+                            if (g.score > maxScore) maxScore = g.score;
+                            hasAvailableMachi = true;
+                        }
+                    });
+                    if (!hasAvailableMachi) {
+                        maxScore = Math.max(...machiData.groups.map(g => g.score));
+                    }
+                    
+                    candidates.push({
+                        discardCandidate: discardCandidate,
+                        machiData: machiData,
+                        maxScore: maxScore,
+                        hasAvailableMachi: hasAvailableMachi
+                    });
+                }
+            });
+
+            let globalMaxScore = 0;
+            let globalMaxAvailableCount = 0;
+            candidates.forEach(c => {
+                if (c.hasAvailableMachi) {
+                    if (c.maxScore > globalMaxScore) globalMaxScore = c.maxScore;
+                    if (c.machiData.availableCount > globalMaxAvailableCount) globalMaxAvailableCount = c.machiData.availableCount;
+                }
+            });
+
+            // 候補のソート（有効待ちあり優先 -> ベスト候補優先 -> 点数降順 -> 待ち枚数降順）
+            candidates.sort((a, b) => {
+                if (a.hasAvailableMachi && !b.hasAvailableMachi) return -1;
+                if (!a.hasAvailableMachi && b.hasAvailableMachi) return 1;
+                
+                const aIsBest = (a.maxScore === globalMaxScore && a.maxScore > 0) || (a.machiData.availableCount === globalMaxAvailableCount && globalMaxAvailableCount > 0);
+                const bIsBest = (b.maxScore === globalMaxScore && b.maxScore > 0) || (b.machiData.availableCount === globalMaxAvailableCount && globalMaxAvailableCount > 0);
+                
+                if (aIsBest && !bIsBest) return -1;
+                if (!aIsBest && bIsBest) return 1;
+
+                if (b.maxScore !== a.maxScore) return b.maxScore - a.maxScore;
+                
+                return b.machiData.availableCount - a.machiData.availableCount;
+            });
+
+            if (candidates.length === 0) {
+                assistHtml += `<div class="text-[10px] md:text-xs text-gray-500 text-center py-2">1枚捨ててアガリ形（待ち）になる牌はありません。</div>`;
+            } else {
+                candidates.forEach((c, index) => {
+                    const discardCandidate = c.discardCandidate;
+                    const machiData = c.machiData;
+                    const maxScore = c.maxScore;
+                    const hasAvailableMachi = c.hasAvailableMachi;
+                    
+                    let allMachiTiles = [];
+                    machiData.groups.forEach(g => {
+                        g.tiles.forEach(tObj => {
+                            if (!allMachiTiles.some(item => item.tile.id === tObj.tile.id)) {
+                                allMachiTiles.push({
+                                    tile: tObj.tile,
+                                    isJunkara: tObj.isJunkara,
+                                    score: g.score
+                                });
+                            }
+                        });
+                    });
+
+                    allMachiTiles.sort((a, b) => {
+                        if (a.isJunkara !== b.isJunkara) {
+                            return a.isJunkara ? 1 : -1;
+                        }
+                        return b.score - a.score;
+                    });
+                    
+                    let machiTilesHtml = "";
+                    let limit = 0;
+                    allMachiTiles.forEach(tObj => {
+                        if(limit < 5) {
+                            machiTilesHtml += createSmallTileHTML(tObj.tile, tObj.isJunkara);
+                            limit++;
+                        }
+                    });
+                    if(allMachiTiles.length > 5) machiTilesHtml += `<div class="text-[9px] text-gray-500 ml-1 self-end mb-1 whitespace-nowrap">他 ${allMachiTiles.length - 5}種</div>`;
+
+                    const maxScoreTxt = hasAvailableMachi ? `最大 ${maxScore.toLocaleString()}` : `(純カラ) 最大 ${maxScore.toLocaleString()}`;
+                    const maxScoreColor = hasAvailableMachi ? "text-red-600" : "text-gray-500";
+                    let remainColor = machiData.availableCount > 0 ? "text-blue-700" : "text-red-500";
+
+                    // 最高打点、最広待ちのバッジ判定とUI出し分け
+                    const isHighestScore = hasAvailableMachi && maxScore === globalMaxScore && maxScore > 0;
+                    const isMaxWait = hasAvailableMachi && machiData.availableCount === globalMaxAvailableCount && globalMaxAvailableCount > 0;
+
+                    let badges = [];
+                    if (currentScore > 0 && maxScore > currentScore) {
+                        badges.push(`<span class="bg-red-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm animate-pulse font-black whitespace-nowrap">点数UP！</span>`);
+                    }
+                    
+                    if (isHighestScore && isMaxWait) {
+                        badges.push(`<span class="bg-orange-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-orange-600 whitespace-nowrap">最高打点 & 最広待ち</span>`);
+                    } else {
+                        if (isHighestScore) {
+                            badges.push(`<span class="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-yellow-500 whitespace-nowrap">最高打点</span>`);
+                        }
+                        if (isMaxWait) {
+                            badges.push(`<span class="bg-blue-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-blue-600 whitespace-nowrap">最広待ち</span>`);
+                        }
+                    }
+                    
+                    let upBadgeHtml = badges.length > 0 ? `<div class="flex gap-1 ml-1 md:ml-2 flex-wrap">` + badges.join('') + `</div>` : "";
+
+                    let wrapperClass = "flex items-center p-1.5 md:p-2 rounded shadow-sm border mb-1.5 ";
+
+                    if (!hasAvailableMachi) {
+                        wrapperClass += "bg-gray-100 border-gray-300 opacity-80";
+                    } else if (currentScore > 0 && maxScore > currentScore) {
+                        wrapperClass += "bg-red-50 border-red-300 ring-1 ring-red-300";
+                    } else if (isHighestScore || isMaxWait) {
+                        wrapperClass += "bg-yellow-50 border-yellow-400 ring-1 ring-yellow-400";
+                    } else {
+                        wrapperClass += "bg-white border-gray-200";
+                    }
+
+                    assistHtml += `
+                        <div class="${wrapperClass}">
+                            <div class="flex flex-col items-center mr-2 md:mr-3 shrink-0">
+                                <span class="text-[8px] text-gray-500 font-bold mb-0.5">これを捨てる</span>
+                                ${createCompactTileHTML(discardCandidate, "", "w-[40px] md:w-[50px]")}
+                            </div>
+                            <div class="flex flex-col flex-grow min-w-0">
+                                <div class="flex justify-between items-start md:items-center mb-0.5 border-b border-gray-100 pb-0.5 flex-col md:flex-row gap-1 md:gap-0">
+                                    <div class="flex items-center flex-wrap gap-y-1">
+                                        <span class="text-[10px] md:text-xs font-bold ${remainColor} whitespace-nowrap">残り ${machiData.availableCount} 枚</span>
+                                        ${upBadgeHtml}
+                                    </div>
+                                    <span class="text-[9px] md:text-[10px] ${maxScoreColor} font-bold whitespace-nowrap">${maxScoreTxt}</span>
+                                </div>
+                                <div class="flex flex-wrap items-center">
+                                    ${machiTilesHtml}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            body.innerHTML = agariHtml + assistHtml;
+        }
+    }
+
+    function renderTabs() {
+        const tabsContainer = document.getElementById('series-tabs');
+        let html = '';
+        Object.keys(seriesNames).forEach(key => {
+            const isActive = activeTab === key;
+            const bgClass = isActive ? 'bg-white text-blue-600 border-b-2 border-blue-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200';
+            html += `<button onclick="window.switchTab('${key}')" class="px-3 md:px-4 py-1.5 md:py-2 font-bold text-[10px] md:text-sm whitespace-nowrap transition-colors ${bgClass}">${seriesNames[key]}</button>`;
+        });
+        tabsContainer.innerHTML = html;
+    }
+
+    function renderPalette() {
+        const paletteContainer = document.getElementById('tile-palette');
+        const targetTiles = masterData.tiles.filter(t => t.series === activeTab);
+        
+        let html = '';
+        targetTiles.forEach(tile => {
+            const inHand = selectedHand.some(t => t.id === tile.id);
+            const inVisible = visibleTiles.some(t => t.id === tile.id);
+            
+            let extraClasses = "";
+            let onClick = "";
+            let overlay = "";
+
+            if (inputMode === 'hand') {
+                if (inHand) {
+                    extraClasses = "opacity-30 grayscale cursor-not-allowed";
+                } else if (inVisible) {
+                    extraClasses = "ring-2 ring-red-500 opacity-70 bg-red-50 cursor-not-allowed";
+                    overlay = `<div class="absolute inset-0 bg-red-500/20 rounded pointer-events-none"></div><div class="absolute inset-0 flex items-center justify-center pointer-events-none"><span class="text-red-600 font-black text-2xl drop-shadow-md pb-2 opacity-80">×</span></div>`;
+                } else {
+                    extraClasses = "hover:scale-105 cursor-pointer";
+                    onClick = `onclick="window.addTile('${tile.id}')"`;
+                }
+            } else { // inputMode === 'visible'
+                if (inHand) {
+                    extraClasses = "opacity-30 grayscale cursor-not-allowed";
+                } else if (inVisible) {
+                    extraClasses = "ring-4 ring-red-500 opacity-80 cursor-pointer hover:scale-105";
+                    overlay = `<div class="absolute inset-0 bg-red-500/30 rounded pointer-events-none"></div><div class="absolute inset-0 flex items-center justify-center pointer-events-none"><span class="text-red-700 font-black text-3xl drop-shadow-md pb-2">×</span></div>`;
+                    onClick = `onclick="window.addTile('${tile.id}')"`;
+                } else {
+                    extraClasses = "hover:scale-105 cursor-pointer hover:ring-2 hover:ring-red-300";
+                    onClick = `onclick="window.addTile('${tile.id}')"`;
+                }
+            }
+            
+            html += createTileHTML(tile, onClick, extraClasses, overlay);
+        });
+        paletteContainer.innerHTML = html;
+    }
+
+
+    // --- 初期化 ---
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTabs();
+        renderPalette();
+        renderApp();
+    });
+
+</script>
+
+</body>
+</html>
