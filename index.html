@@ -78,11 +78,10 @@
     </div>
 
     <!-- 牌パレット（入力用） -->
-    <div id="palette-container" class="bg-white rounded-lg shadow-sm shrink-0 flex flex-col h-48 sm:h-56 md:h-64 border-t-4 border-gray-300 transition-colors duration-300">
+    <div id="palette-container" class="bg-white rounded-lg shadow-sm shrink-0 flex flex-col h-[200px] sm:h-[220px] md:h-64 border-t-4 border-gray-300 transition-colors duration-300">
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
         </div>
-        <!-- ★ 幅を可変(w-full)にし、1行5枚で隙間を詰める -->
         <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1.5 md:gap-2 content-start bg-slate-100">
             <!-- JSで生成 -->
         </div>
@@ -453,31 +452,32 @@
 
     // --- UI生成関数 ---
     
-    // パレット用の小さな牌
+    // パレット用の標準サイズの牌
     function createTileHTML(tile, onClickHTML = "", extraClasses = "", overlayHTML = "") {
         const clickableClass = onClickHTML ? "playable" : "";
         const seriesBorder = seriesColors[tile.series].split(' ')[1]; 
         
-        // ★修正: 牌サイズを小さくする
-        let html = `<div class="border sm:border-2 ${seriesBorder} rounded w-full h-[48px] sm:h-[56px] md:h-16 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
+        let html = `<div class="border sm:border-2 ${seriesBorder} rounded w-full h-[46px] sm:h-[56px] md:h-16 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
         html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
         
+        // ★変更: 学年のフォントを font-bold に戻す
         if (tile.grade) {
-            html += `<span class="absolute top-0 left-[2px] font-bold z-10 text-[7px] md:text-[9px] text-gray-700 whitespace-nowrap scale-[0.8] origin-top-left">${tile.grade}年</span>`;
+            html += `<span class="absolute top-[1px] left-[2px] font-bold z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
         }
         
+        // ★変更: 誕生月・学校名のフォントを font-bold に戻す
         const topRightText = getMonthOrSchoolText(tile);
         if (topRightText) {
-            html += `<span class="absolute top-0 right-[2px] z-10 text-[7px] md:text-[9px] text-gray-700 whitespace-nowrap font-bold scale-[0.8] origin-top-right">${topRightText}</span>`;
+            html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-bold leading-none tracking-tighter">${topRightText}</span>`;
         }
         
         let displayName = tile.name;
-        if (displayName === "セラス 柳田 リリエンフェルト") displayName = "セラス<br>柳田<br>リリエンフェルト";
+        if (displayName === "セラス 柳田 リリエンフェルト") displayName = "セラス 柳田<br>ﾘﾘｴﾝﾌｪﾙﾄ";
         else if (displayName.includes(' ')) displayName = displayName.split(' ').join('<br>');
         else if (displayName.includes('・')) displayName = displayName.replace('・', '・<br>');
         
-        html += `<div class="flex-grow flex items-center justify-center w-full z-10 mt-1.5 sm:mt-2 mb-0.5 px-[2px] overflow-hidden">`;
-        html += `<span class="font-bold text-center break-words leading-[1.1] text-[8px] sm:text-[9px] md:text-[11px]">${displayName}</span>`;
+        html += `<div class="flex-grow flex items-center justify-center w-full z-10 mt-3 mb-0.5 px-[2px] overflow-hidden">`;
+        html += `<span class="font-bold text-center break-words leading-[1.1] text-[9px] sm:text-[10px] md:text-xs">${displayName}</span>`;
         html += `</div>`;
 
         html += overlayHTML;
@@ -562,18 +562,18 @@
 
         const colorClasses = `bg-white border ${seriesColors[tile.series].split(' ')[1]} ${seriesColors[tile.series].split(' ')[2]}`;
         
-        let wrapClass = "relative flex items-center h-6 md:h-8 px-1 md:px-2 rounded shadow-sm border " + colorClasses;
+        let wrapClass = "relative flex items-center h-7 md:h-8 px-1.5 md:px-2 rounded shadow-sm border " + colorClasses;
         if (isJunkara) wrapClass += " opacity-50 grayscale";
         if (onClickHTML) wrapClass += " cursor-pointer hover:scale-105 transition";
 
         let badge = "";
         if (isJunkara) {
-            badge = `<div class="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-gray-600 text-white text-[7px] font-bold px-1 rounded-full border border-white z-10 scale-90 shadow-sm whitespace-nowrap">0枚</div>`;
+            badge = `<div class="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-gray-600 text-white text-[8px] font-bold px-1 rounded-full border border-white z-10 scale-90 shadow-sm whitespace-nowrap">0枚</div>`;
         }
 
         return `
             <div class="${wrapClass} w-max shrink-0 mt-2 mr-1" ${onClickHTML}>
-                <span class="font-bold text-[9px] md:text-[11px] truncate leading-none mr-1">${shortName}</span>
+                <span class="font-bold text-[10px] md:text-xs truncate leading-none mr-1">${shortName}</span>
                 ${subInfoHTML}
                 ${badge}
             </div>
