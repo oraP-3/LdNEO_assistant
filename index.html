@@ -82,7 +82,8 @@
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
         </div>
-        <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1 content-start bg-slate-100">
+        <!-- ★ 幅を可変(w-full)にし、1行5枚で隙間を詰める -->
+        <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1.5 md:gap-2 content-start bg-slate-100">
             <!-- JSで生成 -->
         </div>
     </div>
@@ -452,21 +453,22 @@
 
     // --- UI生成関数 ---
     
-    // パレット用の標準サイズの牌
+    // パレット用の小さな牌
     function createTileHTML(tile, onClickHTML = "", extraClasses = "", overlayHTML = "") {
         const clickableClass = onClickHTML ? "playable" : "";
         const seriesBorder = seriesColors[tile.series].split(' ')[1]; 
         
-        let html = `<div class="border-2 ${seriesBorder} rounded w-[48px] sm:w-[52px] md:w-16 h-[68px] sm:h-[74px] md:h-24 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
+        // ★修正: 牌サイズを小さくする
+        let html = `<div class="border sm:border-2 ${seriesBorder} rounded w-full h-[48px] sm:h-[56px] md:h-16 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
         html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
         
         if (tile.grade) {
-            html += `<span class="absolute top-0 left-0.5 font-bold z-10 text-[8px] md:text-[10px] text-gray-700 whitespace-nowrap">${tile.grade}年</span>`;
+            html += `<span class="absolute top-0 left-[2px] font-bold z-10 text-[7px] md:text-[9px] text-gray-700 whitespace-nowrap scale-[0.8] origin-top-left">${tile.grade}年</span>`;
         }
         
         const topRightText = getMonthOrSchoolText(tile);
         if (topRightText) {
-            html += `<span class="absolute top-0 right-0.5 z-10 text-[8px] md:text-[10px] text-gray-700 whitespace-nowrap font-bold">${topRightText}</span>`;
+            html += `<span class="absolute top-0 right-[2px] z-10 text-[7px] md:text-[9px] text-gray-700 whitespace-nowrap font-bold scale-[0.8] origin-top-right">${topRightText}</span>`;
         }
         
         let displayName = tile.name;
@@ -474,8 +476,8 @@
         else if (displayName.includes(' ')) displayName = displayName.split(' ').join('<br>');
         else if (displayName.includes('・')) displayName = displayName.replace('・', '・<br>');
         
-        html += `<div class="flex-grow flex items-center justify-center w-full z-10 mt-3 mb-0.5 px-0.5 overflow-hidden">`;
-        html += `<span class="font-bold text-center break-words leading-tight text-[8px] sm:text-[9px] md:text-sm">${displayName}</span>`;
+        html += `<div class="flex-grow flex items-center justify-center w-full z-10 mt-1.5 sm:mt-2 mb-0.5 px-[2px] overflow-hidden">`;
+        html += `<span class="font-bold text-center break-words leading-[1.1] text-[8px] sm:text-[9px] md:text-[11px]">${displayName}</span>`;
         html += `</div>`;
 
         html += overlayHTML;
@@ -662,7 +664,7 @@
     window.executeClearHand = function() {
         selectedHand = [];
         visibleTiles = [];
-        setInputMode('hand'); // ★追加: クリア後にデフォルトの手牌入力モードに戻す
+        setInputMode('hand'); // クリア後に手牌入力モードに戻す
         renderApp();
         renderPalette(); 
         document.getElementById('clear-confirm-modal').classList.add('hidden');
