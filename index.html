@@ -51,7 +51,8 @@
 
     <!-- 選択中の手牌エリア -->
     <div id="area-hand" class="bg-white p-2 rounded-lg shadow-sm flex flex-col ring-2 ring-blue-400 transition-all shrink-0 relative overflow-hidden">
-        <!-- 誤操作防止用オーバーレイ（★今回の修正で削除、代わりにテキストでガイド） -->
+        <!-- 誤操作防止用オーバーレイ -->
+        <div id="hand-overlay" class="hidden absolute inset-0 bg-slate-200/50 z-30 backdrop-blur-[1px]"></div>
         
         <div class="flex justify-between items-end mb-1 relative z-40">
             <h2 class="font-bold text-gray-700 text-xs md:text-sm flex items-center gap-2">
@@ -81,7 +82,6 @@
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
         </div>
-        <!-- 横幅を広く取り、5列で配置 -->
         <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1.5 md:gap-2 content-start bg-slate-100">
             <!-- JSで生成 -->
         </div>
@@ -222,14 +222,20 @@
                 { "name": "Plumina", "score": 120000, "required": ["ikizu_midori", "ikizu_aurora", "ikizu_yukuri"] },
                 { "name": "椿咲花女子高校", "score": 180000, "required": ["musical_rurika", "musical_yuzuha", "musical_yukino", "musical_hikaru", "musical_maya"] },
                 { "name": "滝桜女学院", "score": 180000, "required": ["musical_anzu", "musical_misuzu", "musical_toa", "musical_rena", "musical_sayaka"] },
-                { "name": "AiScReam", "score": 60000, "required": ["aqours_ruby", "niji_ayumu", "liella_shiki", "hasu_serasu", "ikizu_mai"], "requiredCount": 3 },
+                { "name": "AiScReam", "score": 120000, "required": ["aqours_ruby", "niji_ayumu", "liella_shiki"] },
+                { "name": "AiSCreaM", "score": 120000, "required": ["niji_ayumu", "liella_shiki", "hasu_serasu", "ikizu_mai"], "requiredCount": 3 },
                 { "name": "わいわいわい", "score": 120000, "required": ["aqours_you", "aqours_yoshiko", "aqours_ruby"] },
                 { "name": "Ruri&To", "score": 60000, "required": ["hasu_sayaka", "hasu_rurino", "hasu_kosuzu", "hasu_serasu"] },
                 { "name": "PRINCEε>ε>", "score": 60000, "required": ["hasu_kaho", "hasu_ginko", "hasu_hime", "hasu_izumi"] },
                 { "name": "にこりんぱな", "score": 120000, "required": ["muse_rin", "muse_hanayo", "muse_nico"] },
                 { "name": "クーカー", "score": 90000, "required": ["liella_kanon", "liella_keke"] },
                 { "name": "トマカノーテ", "score": 120000, "required": ["liella_kanon", "liella_wien", "liella_tomari"] },
-                { "name": "ぐーりんぱ", "score": 120000, "required": ["aqours_chika", "aqours_dia", "aqours_yoshiko"] }
+                { "name": "ぐーりんぱ", "score": 120000, "required": ["aqours_chika", "aqours_dia", "aqours_yoshiko"] },
+                { "name": "soldier game", "score": 120000, "required": ["muse_eli", "muse_maki", "muse_umi"] },
+                { "name": "ハリケーンブロッサム", "score": 120000, "required": ["aqours_riko", "aqours_hanamaru", "aqours_mari"] },
+                { "name": "電撃組", "score": 120000, "required": ["niji_kasumi", "niji_setsuna", "niji_karin"] },
+                { "name": "スクフェス組", "score": 120000, "required": ["niji_shizuku", "niji_kanata", "niji_emma"] },
+                { "name": "ファミ通組", "score": 120000, "required": ["niji_ayumu", "niji_ai", "niji_rina"] }
             ],
             "gradeSets": [
                 { "name": "1年生セット", "grade": 1, "score": 60000, "requiredCount": 5 },
@@ -314,15 +320,24 @@
         let satisfiedYaku = [];
 
         let seriesInfo = {};
+        let logoSchoolCount = 0;
+        const greenCharIds = ["muse_hanayo", "aqours_kanan", "niji_emma", "niji_shioriko", "liella_sumire", "hasu_izumi", "musical_hikaru", "musical_rena", "ikizu_akira", "ikizu_midori"];
+        let greenMatchCount = 0;
+
         allTiles.forEach(t => {
             if (!seriesInfo[t.series]) seriesInfo[t.series] = { chars: 0, almighties: 0 };
             if (t.type === 'character') seriesInfo[t.series].chars++;
             else seriesInfo[t.series].almighties++;
+
+            if (t.type === 'logo' || t.type === 'school') logoSchoolCount++;
+            if (t.characterId && greenCharIds.includes(t.characterId)) greenMatchCount++;
         });
 
         let setsOfThree = 0;
         let isOneSeries = false;
+        let isSpecialYaku = false;
 
+        // ★この部分が欠落していたためエラーになっていました
         Object.values(seriesInfo).forEach(info => {
             const total = info.chars + info.almighties;
             if (total === 9) isOneSeries = true;
@@ -332,7 +347,18 @@
             setsOfThree += Math.min(maxSetsByTotal, maxSetsByChars);
         });
 
-        if (isOneSeries) {
+        // ★追加: 特殊役判定
+        if (logoSchoolCount === 9) {
+            hasBasicYaku = true;
+            isSpecialYaku = true;
+            satisfiedYaku.push({ name: "ALL STARS", score: 780000 });
+            totalScore += 780000;
+        } else if (greenMatchCount === 9) {
+            hasBasicYaku = true;
+            isSpecialYaku = true;
+            satisfiedYaku.push({ name: "緑一色", score: 1200000 });
+            totalScore += 1200000;
+        } else if (isOneSeries) {
             hasBasicYaku = true;
             satisfiedYaku.push({ name: "1シリーズセット", score: 420000 });
             totalScore += 420000;
@@ -380,7 +406,8 @@
             }
         });
 
-        if (bonusYakuCount === 0) return { canAgari: false, reason: "bonus" };
+        // ★変更: 特殊役の場合はボーナス役がなくてもアガリ成立とする
+        if (bonusYakuCount === 0 && !isSpecialYaku) return { canAgari: false, reason: "bonus" };
 
         return { canAgari: true, yaku: satisfiedYaku, totalScore: totalScore };
     }
@@ -452,24 +479,22 @@
 
     // --- UI生成関数 ---
     
-    // パレット用の標準サイズの牌 (幅いっぱいで縦圧縮のサイズ ＋ 文字サイズ大・太字)
+    // パレット用の標準サイズの牌 
     function createTileHTML(tile, onClickHTML = "", extraClasses = "", overlayHTML = "") {
         const clickableClass = onClickHTML ? "playable" : "";
         const seriesBorder = seriesColors[tile.series].split(' ')[1]; 
         
-        // ★前の指示のサイズ (w-full, h-[46px] sm:h-[56px] md:h-16)
         let html = `<div class="border sm:border-2 ${seriesBorder} rounded w-full h-[46px] sm:h-[56px] md:h-16 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
         html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
         
-        // ★変更: 学年・誕生月の文字サイズは大きく(10px/12px)し、font-black（太いフォント）を適用
         if (tile.grade) {
-            html += `<span class="absolute top-[1px] left-[2px] font-black z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
+            html += `<span class="absolute top-[1px] left-[2px] font-bold z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
         }
         
         if (tile.birthMonth || tile.series === 'musical') {
             const topRightText = getMonthOrSchoolText(tile);
             if (topRightText) {
-                html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-black leading-none tracking-tighter">${topRightText}</span>`;
+                html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-bold leading-none tracking-tighter">${topRightText}</span>`;
             }
         }
         
@@ -591,6 +616,7 @@
         const btnVisible = document.getElementById('btn-mode-visible');
         const areaHand = document.getElementById('area-hand');
         const paletteContainer = document.getElementById('palette-container');
+        const handOverlay = document.getElementById('hand-overlay');
         const handRemoveText = document.getElementById('hand-remove-text');
 
         if (mode === 'hand') {
@@ -600,6 +626,7 @@
             areaHand.classList.add('ring-2', 'ring-blue-400');
             paletteContainer.classList.replace('border-red-400', 'border-gray-300');
             
+            handOverlay.classList.add('hidden');
             handRemoveText.innerText = "タップで外す";
             handRemoveText.className = "text-[9px] md:text-[10px] text-gray-500 font-bold bg-gray-200 px-1.5 py-0.5 rounded shadow-sm";
         } else {
@@ -609,8 +636,9 @@
             areaHand.classList.remove('ring-2', 'ring-blue-400');
             paletteContainer.classList.replace('border-gray-300', 'border-red-400');
             
-            handRemoveText.innerText = "タップで捨て牌(純カラ)に";
-            handRemoveText.className = "text-[9px] md:text-[10px] text-red-600 font-bold bg-red-100 px-1.5 py-0.5 rounded shadow-sm border border-red-300";
+            handOverlay.classList.remove('hidden');
+            handRemoveText.innerText = "※編集中はロック";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded";
         }
         
         renderHand(); 
@@ -649,17 +677,7 @@
     };
 
     window.removeTileFromHand = function(index) {
-        if (inputMode === 'hand') {
-            selectedHand.splice(index, 1);
-        } else if (inputMode === 'visible') {
-            // 場見えモード時は、手牌から外してそのまま純カラに登録
-            const removedTile = selectedHand.splice(index, 1)[0];
-            if (!visibleTiles.some(t => t.id === removedTile.id)) {
-                visibleTiles.push(removedTile);
-                visibleTiles.sort((a, b) => a.id.localeCompare(b.id));
-            }
-        }
-        
+        selectedHand.splice(index, 1);
         renderApp();
         renderPalette(); 
     };
@@ -715,6 +733,9 @@
 
         const monthCounts = {}; const gradeCounts = {}; const musicalCounts = {}; 
         const handCharIds = selectedHand.map(t => t.characterId).filter(id => id != null);
+        let logoSchoolCount = 0;
+        const greenCharIds = ["muse_hanayo", "aqours_kanan", "niji_emma", "niji_shioriko", "liella_sumire", "hasu_izumi", "musical_hikaru", "musical_rena", "ikizu_akira", "ikizu_midori"];
+        let greenMatchCount = 0;
         
         selectedHand.forEach(t => {
             if (t.birthMonth) monthCounts[t.birthMonth] = (monthCounts[t.birthMonth] || 0) + 1;
@@ -723,6 +744,8 @@
                 const school = getMonthOrSchoolText(t);
                 if (school) musicalCounts[school] = (musicalCounts[school] || 0) + 1;
             }
+            if (t.type === 'logo' || t.type === 'school') logoSchoolCount++;
+            if (t.characterId && greenCharIds.includes(t.characterId)) greenMatchCount++;
         });
 
         const unitStatusMap = {};
@@ -748,14 +771,29 @@
             const mCount = tile.birthMonth ? monthCounts[tile.birthMonth] : 0;
             const gCount = tile.grade ? gradeCounts[tile.grade] : 0;
             const musCount = tile.series === 'musical' ? musicalCounts[getMonthOrSchoolText(tile)] : 0;
-            const uStatus = tile.characterId ? (unitStatusMap[tile.characterId] || { complete: [], reach: [] }) : { complete: [], reach: [] };
-
-            let onClick = `onclick="window.removeTileFromHand(${idx})"`;
-            let extraClasses = "pop-in hover:scale-105 cursor-pointer";
             
-            // 場見えモード時は少し見た目を変える
-            if (inputMode === 'visible') {
-                extraClasses += " ring-2 ring-red-300";
+            const uStatus = { complete: [], reach: [] };
+            if (tile.characterId && unitStatusMap[tile.characterId]) {
+                uStatus.complete.push(...unitStatusMap[tile.characterId].complete);
+                uStatus.reach.push(...unitStatusMap[tile.characterId].reach);
+            }
+            if (tile.type === 'logo' || tile.type === 'school') {
+                if (logoSchoolCount >= 9) uStatus.complete.push("ALL STARS");
+                else if (logoSchoolCount === 8) uStatus.reach.push("ALL STARS");
+            }
+            if (tile.characterId && greenCharIds.includes(tile.characterId)) {
+                if (greenMatchCount >= 9) uStatus.complete.push("緑一色");
+                else if (greenMatchCount === 8) uStatus.reach.push("緑一色");
+            }
+
+            let onClick = "";
+            let extraClasses = "pop-in";
+            
+            if (inputMode === 'hand') {
+                onClick = `onclick="window.removeTileFromHand(${idx})"`;
+                extraClasses += " hover:scale-105 cursor-pointer";
+            } else {
+                extraClasses += " opacity-50 grayscale";
             }
 
             html += createCompactTileHTML(tile, onClick, extraClasses, mCount, gCount, musCount, uStatus);
