@@ -51,8 +51,7 @@
 
     <!-- 選択中の手牌エリア -->
     <div id="area-hand" class="bg-white p-2 rounded-lg shadow-sm flex flex-col ring-2 ring-blue-400 transition-all shrink-0 relative overflow-hidden">
-        <!-- 誤操作防止用オーバーレイ（場見えモード時に表示） -->
-        <div id="hand-overlay" class="hidden absolute inset-0 bg-slate-200/50 z-30 backdrop-blur-[1px]"></div>
+        <!-- 誤操作防止用オーバーレイ（★今回の修正で削除、代わりにテキストでガイド） -->
         
         <div class="flex justify-between items-end mb-1 relative z-40">
             <h2 class="font-bold text-gray-700 text-xs md:text-sm flex items-center gap-2">
@@ -82,6 +81,7 @@
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
         </div>
+        <!-- 横幅を広く取り、5列で配置 -->
         <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1.5 md:gap-2 content-start bg-slate-100">
             <!-- JSで生成 -->
         </div>
@@ -452,23 +452,25 @@
 
     // --- UI生成関数 ---
     
-    // パレット用の標準サイズの牌
+    // パレット用の標準サイズの牌 (幅いっぱいで縦圧縮のサイズ ＋ 文字サイズ大・太字)
     function createTileHTML(tile, onClickHTML = "", extraClasses = "", overlayHTML = "") {
         const clickableClass = onClickHTML ? "playable" : "";
         const seriesBorder = seriesColors[tile.series].split(' ')[1]; 
         
+        // ★前の指示のサイズ (w-full, h-[46px] sm:h-[56px] md:h-16)
         let html = `<div class="border sm:border-2 ${seriesBorder} rounded w-full h-[46px] sm:h-[56px] md:h-16 shrink-0 flex flex-col shadow-sm relative bg-white transition-all ${clickableClass} ${extraClasses}" ${onClickHTML}>`;
         html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
         
-        // ★変更: 学年のフォントを font-bold に戻す
+        // ★変更: 学年・誕生月の文字サイズは大きく(10px/12px)し、font-black（太いフォント）を適用
         if (tile.grade) {
-            html += `<span class="absolute top-[1px] left-[2px] font-bold z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
+            html += `<span class="absolute top-[1px] left-[2px] font-black z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
         }
         
-        // ★変更: 誕生月・学校名のフォントを font-bold に戻す
-        const topRightText = getMonthOrSchoolText(tile);
-        if (topRightText) {
-            html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-bold leading-none tracking-tighter">${topRightText}</span>`;
+        if (tile.birthMonth || tile.series === 'musical') {
+            const topRightText = getMonthOrSchoolText(tile);
+            if (topRightText) {
+                html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-black leading-none tracking-tighter">${topRightText}</span>`;
+            }
         }
         
         let displayName = tile.name;
@@ -589,7 +591,6 @@
         const btnVisible = document.getElementById('btn-mode-visible');
         const areaHand = document.getElementById('area-hand');
         const paletteContainer = document.getElementById('palette-container');
-        const handOverlay = document.getElementById('hand-overlay');
         const handRemoveText = document.getElementById('hand-remove-text');
 
         if (mode === 'hand') {
@@ -599,7 +600,6 @@
             areaHand.classList.add('ring-2', 'ring-blue-400');
             paletteContainer.classList.replace('border-red-400', 'border-gray-300');
             
-            handOverlay.classList.add('hidden');
             handRemoveText.innerText = "タップで外す";
             handRemoveText.className = "text-[9px] md:text-[10px] text-gray-500 font-bold bg-gray-200 px-1.5 py-0.5 rounded shadow-sm";
         } else {
@@ -609,9 +609,8 @@
             areaHand.classList.remove('ring-2', 'ring-blue-400');
             paletteContainer.classList.replace('border-gray-300', 'border-red-400');
             
-            handOverlay.classList.remove('hidden');
-            handRemoveText.innerText = "※編集中はロック";
-            handRemoveText.className = "text-[9px] md:text-[10px] text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded";
+            handRemoveText.innerText = "タップで捨て牌(純カラ)に";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-red-600 font-bold bg-red-100 px-1.5 py-0.5 rounded shadow-sm border border-red-300";
         }
         
         renderHand(); 
@@ -650,7 +649,17 @@
     };
 
     window.removeTileFromHand = function(index) {
-        selectedHand.splice(index, 1);
+        if (inputMode === 'hand') {
+            selectedHand.splice(index, 1);
+        } else if (inputMode === 'visible') {
+            // 場見えモード時は、手牌から外してそのまま純カラに登録
+            const removedTile = selectedHand.splice(index, 1)[0];
+            if (!visibleTiles.some(t => t.id === removedTile.id)) {
+                visibleTiles.push(removedTile);
+                visibleTiles.sort((a, b) => a.id.localeCompare(b.id));
+            }
+        }
+        
         renderApp();
         renderPalette(); 
     };
@@ -741,14 +750,12 @@
             const musCount = tile.series === 'musical' ? musicalCounts[getMonthOrSchoolText(tile)] : 0;
             const uStatus = tile.characterId ? (unitStatusMap[tile.characterId] || { complete: [], reach: [] }) : { complete: [], reach: [] };
 
-            let onClick = "";
-            let extraClasses = "pop-in";
+            let onClick = `onclick="window.removeTileFromHand(${idx})"`;
+            let extraClasses = "pop-in hover:scale-105 cursor-pointer";
             
-            if (inputMode === 'hand') {
-                onClick = `onclick="window.removeTileFromHand(${idx})"`;
-                extraClasses += " hover:scale-105 cursor-pointer";
-            } else {
-                extraClasses += " opacity-50 grayscale";
+            // 場見えモード時は少し見た目を変える
+            if (inputMode === 'visible') {
+                extraClasses += " ring-2 ring-red-300";
             }
 
             html += createCompactTileHTML(tile, onClick, extraClasses, mCount, gCount, musCount, uStatus);
