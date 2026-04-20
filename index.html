@@ -43,15 +43,36 @@
         </button>
     </div>
 
-    <!-- モード切替トグル -->
-    <div class="flex bg-gray-200 rounded-lg p-1 shrink-0">
-        <button id="btn-mode-hand" onclick="setInputMode('hand')" class="flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-blue-600 shadow-sm transition border-2 border-blue-400">手牌に入力</button>
-        <button id="btn-mode-visible" onclick="setInputMode('visible')" class="flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent">場見え牌（純カラ）入力</button>
+    <!-- モード切替とコントロールパネル -->
+    <div class="flex flex-col gap-1 shrink-0">
+        <!-- 親子・思想セット コントロールパネル -->
+        <div class="flex justify-between items-center bg-white p-1.5 md:p-2 rounded-lg shadow-sm border border-gray-200">
+            <div class="flex items-center gap-1.5">
+                <span class="text-[10px] md:text-xs font-bold text-gray-600">自風</span>
+                <div class="flex bg-gray-200 rounded p-0.5">
+                    <button id="btn-oya" onclick="setOya(true)" class="px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded bg-white text-red-600 shadow-sm">親</button>
+                    <button id="btn-ko" onclick="setOya(false)" class="px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded text-gray-500 hover:text-gray-700">子</button>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <span class="text-[10px] md:text-xs font-bold text-gray-600">親の思想:</span>
+                <div id="thought-area" class="flex gap-1 items-center min-w-[60px] justify-end">
+                    <span class="text-[9px] text-gray-400">未設定</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 入力モード切替 -->
+        <div class="flex bg-gray-200 rounded-lg p-1">
+            <button id="btn-mode-hand" onclick="setInputMode('hand')" class="flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md bg-white text-blue-600 shadow-sm transition border-2 border-blue-400">手牌に入力</button>
+            <button id="btn-mode-visible" onclick="setInputMode('visible')" class="flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent">場見え牌(純カラ)</button>
+            <button id="btn-mode-thought" onclick="setInputMode('thought')" class="flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent">思想設定(2枚)</button>
+        </div>
     </div>
 
     <!-- 選択中の手牌エリア -->
     <div id="area-hand" class="bg-white p-2 rounded-lg shadow-sm flex flex-col ring-2 ring-blue-400 transition-all shrink-0 relative overflow-hidden">
-        <!-- 誤操作防止用オーバーレイ -->
+        <!-- 誤操作防止用オーバーレイ（非表示） -->
         <div id="hand-overlay" class="hidden absolute inset-0 bg-slate-200/50 z-30 backdrop-blur-[1px]"></div>
         
         <div class="flex justify-between items-end mb-1 relative z-40">
@@ -77,11 +98,12 @@
         </div>
     </div>
 
-    <!-- 牌パレット（入力用） -->
+    <!-- 牌パレット（入力用） ★高さを確保し、横長・文字大サイズ -->
     <div id="palette-container" class="bg-white rounded-lg shadow-sm shrink-0 flex flex-col h-[200px] sm:h-[220px] md:h-64 border-t-4 border-gray-300 transition-colors duration-300">
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
         </div>
+        <!-- 横幅を広く取り、5列で配置 -->
         <div id="tile-palette" class="flex-grow overflow-y-auto custom-scroll p-1.5 md:p-2 grid grid-cols-5 sm:grid-cols-7 md:grid-cols-9 gap-1.5 md:gap-2 content-start bg-slate-100">
             <!-- JSで生成 -->
         </div>
@@ -94,7 +116,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             </div>
             <h2 class="text-lg md:text-xl font-black text-gray-800 mb-2">全クリアの確認</h2>
-            <p class="text-sm md:text-base text-gray-600 mb-6">手牌と場見え牌（純カラ）を<br>すべてリセットしますか？</p>
+            <p class="text-sm md:text-base text-gray-600 mb-6">手牌、場見え牌、思想セットなど<br>すべてリセットしますか？</p>
             <div class="flex justify-center gap-3">
                 <button onclick="executeClearHand()" class="bg-red-500 text-white font-bold py-2 px-6 rounded-full hover:bg-red-600 shadow-md transition">はい</button>
                 <button onclick="closeClearConfirm()" class="bg-gray-300 text-gray-700 font-bold py-2 px-6 rounded-full hover:bg-gray-400 shadow-md transition">いいえ</button>
@@ -281,7 +303,9 @@
     let selectedHand = [];    // 手牌 (最大9枚)
     let visibleTiles = [];   // 場見え牌 (制限なし)
     let activeTab = "muse";
-    let inputMode = "hand";  // 'hand' | 'visible'
+    let inputMode = "hand";  // 'hand' | 'visible' | 'thought'
+    let isOya = true;        // 親(true) か 子(false)
+    let thoughtTiles = [];   // 親の思想セットに選ばれた牌(最大2つ)
 
     // --- ロジック関数 ---
     function getShortName(fullName) {
@@ -337,17 +361,16 @@
         let isOneSeries = false;
         let isSpecialYaku = false;
 
-        // ★この部分が欠落していたためエラーになっていました
         Object.values(seriesInfo).forEach(info => {
             const total = info.chars + info.almighties;
             if (total === 9) isOneSeries = true;
 
             const maxSetsByTotal = Math.floor(total / 3);
-            const maxSetsByChars = Math.floor(info.chars / 2); 
+            const maxSetsByChars = info.chars; 
             setsOfThree += Math.min(maxSetsByTotal, maxSetsByChars);
         });
 
-        // ★追加: 特殊役判定
+        // 特殊役判定
         if (logoSchoolCount === 9) {
             hasBasicYaku = true;
             isSpecialYaku = true;
@@ -371,6 +394,19 @@
         if (!hasBasicYaku) return { canAgari: false, reason: "basic" };
 
         const handCharIds = allTiles.map(t => t.characterId).filter(id => id != null);
+        const handIds = allTiles.map(t => t.id);
+
+        // ★追加: 親の思想セット判定（ボーナス役として処理）
+        if (thoughtTiles.length === 2) {
+            const thoughtMatchCount = thoughtTiles.filter(t => handIds.includes(t.id)).length;
+            if (thoughtMatchCount === 2) {
+                const thoughtScore = isOya ? 120000 : 90000;
+                satisfiedYaku.push({ name: "親の思想セット", score: thoughtScore });
+                totalScore += thoughtScore;
+                bonusYakuCount++;
+            }
+        }
+
         masterData.yakuDef.unitSets.forEach(unit => {
             const matchCount = unit.required.filter(reqId => handCharIds.includes(reqId)).length;
             const neededCount = unit.requiredCount || unit.required.length;
@@ -406,7 +442,6 @@
             }
         });
 
-        // ★変更: 特殊役の場合はボーナス役がなくてもアガリ成立とする
         if (bonusYakuCount === 0 && !isSpecialYaku) return { canAgari: false, reason: "bonus" };
 
         return { canAgari: true, yaku: satisfiedYaku, totalScore: totalScore };
@@ -564,7 +599,7 @@
         html += `<span class="font-bold text-center break-all sm:break-words leading-tight text-[8px] sm:text-[10px] md:text-xs">${shortName}</span>`;
         html += `</div>`;
 
-        // ユニット状態ハイライト
+        // ユニット状態・思想ハイライト
         html += `<div class="w-full flex flex-col items-center justify-end gap-[1px] z-10 min-h-[8px] pb-0.5 px-0.5">`;
         if (unitStatus.complete.length > 0 || unitStatus.reach.length > 0) {
             unitStatus.complete.forEach(u => html += `<span class="bg-red-500 text-white text-[5px] sm:text-[6px] font-bold rounded w-full text-center truncate leading-[1.2] shadow-sm">${u}</span>`);
@@ -609,36 +644,70 @@
 
 
     // --- アクション制御 ---
+    window.setOya = function(isOyaValue) {
+        isOya = isOyaValue;
+        document.getElementById('btn-oya').className = isOya ? "px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded bg-white text-red-600 shadow-sm" : "px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded text-gray-500 hover:text-gray-700";
+        document.getElementById('btn-ko').className = !isOya ? "px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded bg-white text-blue-600 shadow-sm" : "px-2 md:px-3 py-1 text-[10px] md:text-xs font-bold rounded text-gray-500 hover:text-gray-700";
+        renderApp(); 
+    };
+
+    window.removeThoughtTile = function(id) {
+        thoughtTiles = thoughtTiles.filter(t => t.id !== id);
+        renderApp();
+        renderPalette();
+    };
+
+    function renderThoughtArea() {
+        const area = document.getElementById('thought-area');
+        if (thoughtTiles.length === 0) {
+            area.innerHTML = `<span class="text-[9px] text-gray-400">未設定</span>`;
+            return;
+        }
+        let html = '';
+        thoughtTiles.forEach(t => {
+            const seriesBg = seriesColors[t.series].split(' ')[0];
+            const seriesBorder = seriesColors[t.series].split(' ')[1];
+            html += `<div onclick="removeThoughtTile('${t.id}')" class="border ${seriesBorder} ${seriesBg} rounded px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold text-gray-800 shadow-sm cursor-pointer hover:opacity-70 whitespace-nowrap">${getShortName(t.name)}</div>`;
+        });
+        area.innerHTML = html;
+    }
+
     window.setInputMode = function(mode) {
         inputMode = mode;
         
         const btnHand = document.getElementById('btn-mode-hand');
         const btnVisible = document.getElementById('btn-mode-visible');
+        const btnThought = document.getElementById('btn-mode-thought');
         const areaHand = document.getElementById('area-hand');
         const paletteContainer = document.getElementById('palette-container');
-        const handOverlay = document.getElementById('hand-overlay');
         const handRemoveText = document.getElementById('hand-remove-text');
+        const handOverlay = document.getElementById('hand-overlay');
+
+        // リセット
+        btnHand.className = "flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
+        btnVisible.className = "flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
+        btnThought.className = "flex-1 py-1.5 md:py-2 text-[10px] md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
+        areaHand.classList.remove('ring-2', 'ring-blue-400');
+        paletteContainer.classList.remove('border-red-400', 'border-purple-400', 'border-gray-300');
+        handOverlay.classList.remove('hidden');
 
         if (mode === 'hand') {
-            btnHand.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-blue-600 shadow-sm transition border-2 border-blue-400";
-            btnVisible.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
-            
+            btnHand.classList.add('bg-white', 'text-blue-600', 'shadow-sm', 'border-blue-400');
             areaHand.classList.add('ring-2', 'ring-blue-400');
-            paletteContainer.classList.replace('border-red-400', 'border-gray-300');
-            
+            paletteContainer.classList.add('border-gray-300');
             handOverlay.classList.add('hidden');
             handRemoveText.innerText = "タップで外す";
             handRemoveText.className = "text-[9px] md:text-[10px] text-gray-500 font-bold bg-gray-200 px-1.5 py-0.5 rounded shadow-sm";
-        } else {
-            btnHand.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md text-gray-500 hover:text-gray-700 transition border-2 border-transparent";
-            btnVisible.className = "flex-1 py-1.5 md:py-2 text-xs md:text-sm font-bold rounded-md bg-white text-red-600 shadow-sm transition border-2 border-red-400";
-            
-            areaHand.classList.remove('ring-2', 'ring-blue-400');
-            paletteContainer.classList.replace('border-gray-300', 'border-red-400');
-            
-            handOverlay.classList.remove('hidden');
-            handRemoveText.innerText = "※編集中はロック";
-            handRemoveText.className = "text-[9px] md:text-[10px] text-gray-400 font-bold bg-gray-100 px-1.5 py-0.5 rounded";
+        } else if (mode === 'visible') {
+            btnVisible.classList.add('bg-white', 'text-red-600', 'shadow-sm', 'border-red-400');
+            paletteContainer.classList.add('border-red-400');
+            handRemoveText.innerText = "タップで捨て牌(純カラ)に";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-red-600 font-bold bg-red-100 px-1.5 py-0.5 rounded shadow-sm border border-red-300";
+        } else if (mode === 'thought') {
+            btnThought.classList.add('bg-white', 'text-purple-600', 'shadow-sm', 'border-purple-400');
+            paletteContainer.classList.add('border-purple-400');
+            handRemoveText.innerText = "思想セット(2枚)を選択中";
+            handRemoveText.className = "text-[9px] md:text-[10px] text-purple-600 font-bold bg-purple-100 px-1.5 py-0.5 rounded shadow-sm border border-purple-300";
         }
         
         renderHand(); 
@@ -646,6 +715,19 @@
     };
 
     window.addTile = function(tileId) {
+        if (inputMode === 'thought') {
+            if (thoughtTiles.some(t => t.id === tileId)) return;
+            if (thoughtTiles.length >= 2) {
+                showToast("思想セットは2枚までです");
+                return;
+            }
+            const tile = masterData.tiles.find(t => t.id === tileId);
+            thoughtTiles.push(tile);
+            renderApp();
+            renderPalette();
+            return;
+        }
+
         const isHand = selectedHand.some(t => t.id === tileId);
         const isVisible = visibleTiles.some(t => t.id === tileId);
 
@@ -658,14 +740,11 @@
             const tile = masterData.tiles.find(t => t.id === tileId);
             selectedHand.push(tile);
             selectedHand.sort((a, b) => a.id.localeCompare(b.id));
-        } else {
-            // 場見え牌（純カラ）モード
+        } else if (inputMode === 'visible') {
             if (isHand) return; 
             if (isVisible) {
-                // レッドアウト解除
                 visibleTiles = visibleTiles.filter(t => t.id !== tileId);
             } else {
-                // レッドアウト追加
                 const tile = masterData.tiles.find(t => t.id === tileId);
                 visibleTiles.push(tile);
                 visibleTiles.sort((a, b) => a.id.localeCompare(b.id));
@@ -677,13 +756,25 @@
     };
 
     window.removeTileFromHand = function(index) {
-        selectedHand.splice(index, 1);
+        if (inputMode === 'hand') {
+            selectedHand.splice(index, 1);
+        } else if (inputMode === 'visible') {
+            const removedTile = selectedHand.splice(index, 1)[0];
+            if (!visibleTiles.some(t => t.id === removedTile.id)) {
+                visibleTiles.push(removedTile);
+                visibleTiles.sort((a, b) => a.id.localeCompare(b.id));
+            }
+        } else if (inputMode === 'thought') {
+            // 思想モード時は何もしない
+            return;
+        }
+        
         renderApp();
         renderPalette(); 
     };
 
     window.clearHand = function() {
-        if((selectedHand.length > 0 || visibleTiles.length > 0)) {
+        if(selectedHand.length > 0 || visibleTiles.length > 0 || thoughtTiles.length > 0) {
             document.getElementById('clear-confirm-modal').classList.remove('hidden');
         }
     };
@@ -691,7 +782,8 @@
     window.executeClearHand = function() {
         selectedHand = [];
         visibleTiles = [];
-        setInputMode('hand'); // クリア後に手牌入力モードに戻す
+        thoughtTiles = [];
+        setInputMode('hand');
         renderApp();
         renderPalette(); 
         document.getElementById('clear-confirm-modal').classList.add('hidden');
@@ -710,6 +802,7 @@
 
     // --- 描画ロジック ---
     function renderApp() {
+        renderThoughtArea(); // ★追加
         renderHand();
         renderResult();
         
@@ -737,6 +830,12 @@
         const greenCharIds = ["muse_hanayo", "aqours_kanan", "niji_emma", "niji_shioriko", "liella_sumire", "hasu_izumi", "musical_hikaru", "musical_rena", "ikizu_akira", "ikizu_midori"];
         let greenMatchCount = 0;
         
+        // 思想セットのマッチ状況確認用
+        let thoughtMatchCount = 0;
+        if (thoughtTiles.length === 2) {
+            thoughtMatchCount = thoughtTiles.filter(tt => selectedHand.some(t => t.id === tt.id)).length;
+        }
+
         selectedHand.forEach(t => {
             if (t.birthMonth) monthCounts[t.birthMonth] = (monthCounts[t.birthMonth] || 0) + 1;
             if (t.grade) gradeCounts[t.grade] = (gradeCounts[t.grade] || 0) + 1;
@@ -786,14 +885,19 @@
                 else if (greenMatchCount === 8) uStatus.reach.push("緑一色");
             }
 
-            let onClick = "";
-            let extraClasses = "pop-in";
+            // ★追加: 思想セットバッジの追加
+            if (thoughtTiles.length === 2 && thoughtTiles.some(tt => tt.id === tile.id)) {
+                if (thoughtMatchCount >= 2) uStatus.complete.push("思想");
+                else if (thoughtMatchCount === 1) uStatus.reach.push("思想");
+            }
+
+            let onClick = `onclick="window.removeTileFromHand(${idx})"`;
+            let extraClasses = "pop-in hover:scale-105 cursor-pointer";
             
-            if (inputMode === 'hand') {
-                onClick = `onclick="window.removeTileFromHand(${idx})"`;
-                extraClasses += " hover:scale-105 cursor-pointer";
-            } else {
-                extraClasses += " opacity-50 grayscale";
+            if (inputMode === 'visible') {
+                extraClasses += " ring-2 ring-red-300";
+            } else if (inputMode === 'thought') {
+                extraClasses += " opacity-50 grayscale pointer-events-none"; // 思想モード時は手牌を触れないように
             }
 
             html += createCompactTileHTML(tile, onClick, extraClasses, mCount, gCount, musCount, uStatus);
@@ -1086,12 +1190,22 @@
         targetTiles.forEach(tile => {
             const inHand = selectedHand.some(t => t.id === tile.id);
             const inVisible = visibleTiles.some(t => t.id === tile.id);
+            const inThought = thoughtTiles.some(t => t.id === tile.id);
             
             let extraClasses = "";
             let onClick = "";
             let overlay = "";
 
-            if (inputMode === 'hand') {
+            if (inputMode === 'thought') {
+                if (inThought) {
+                    extraClasses = "ring-4 ring-purple-500 opacity-80 cursor-pointer hover:scale-105";
+                    overlay = `<div class="absolute inset-0 bg-purple-500/20 rounded pointer-events-none"></div><div class="absolute inset-0 flex items-center justify-center pointer-events-none"><span class="text-purple-800 font-black text-[10px] bg-white/90 px-1 rounded shadow-sm border border-purple-300">思想</span></div>`;
+                    onClick = `onclick="window.removeThoughtTile('${tile.id}')"`;
+                } else {
+                    extraClasses = "hover:scale-105 cursor-pointer hover:ring-2 hover:ring-purple-300";
+                    onClick = `onclick="window.addTile('${tile.id}')"`;
+                }
+            } else if (inputMode === 'hand') {
                 if (inHand) {
                     extraClasses = "opacity-30 grayscale cursor-not-allowed";
                 } else if (inVisible) {
