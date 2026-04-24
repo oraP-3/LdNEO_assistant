@@ -98,7 +98,7 @@
         </div>
     </div>
 
-    <!-- 牌パレット（入力用） ★高さを確保し、横長・文字大サイズ -->
+    <!-- 牌パレット（入力用） -->
     <div id="palette-container" class="bg-white rounded-lg shadow-sm shrink-0 flex flex-col h-[200px] sm:h-[220px] md:h-64 border-t-4 border-gray-300 transition-colors duration-300">
         <div id="series-tabs" class="flex overflow-x-auto custom-scroll bg-gray-100 shrink-0 border-b border-gray-200">
             <!-- JSで生成 -->
@@ -257,7 +257,10 @@
                 { "name": "ハリケーンブロッサム", "score": 120000, "required": ["aqours_riko", "aqours_hanamaru", "aqours_mari"] },
                 { "name": "電撃組", "score": 120000, "required": ["niji_kasumi", "niji_setsuna", "niji_karin"] },
                 { "name": "スクフェス組", "score": 120000, "required": ["niji_shizuku", "niji_kanata", "niji_emma"] },
-                { "name": "ファミ通組", "score": 120000, "required": ["niji_ayumu", "niji_ai", "niji_rina"] }
+                { "name": "ファミ通組", "score": 120000, "required": ["niji_ayumu", "niji_ai", "niji_rina"] },
+                { "name": "こーるみー!!", "score": 120000, "required": ["ikizu_polka", "ikizu_akira", "ikizu_miracle"] },
+                { "name": "既読待ちLovers", "score": 120000, "required": ["ikizu_mai", "ikizu_aurora", "ikizu_shion"] },
+                { "name": "恋文乙女純情派", "score": 150000, "required": ["ikizu_hanabi", "ikizu_yukuri", "ikizu_noriko", "ikizu_midori"] }
             ],
             "gradeSets": [
                 { "name": "1年生セット", "grade": 1, "score": 60000, "requiredCount": 5 },
@@ -396,7 +399,7 @@
         const handCharIds = allTiles.map(t => t.characterId).filter(id => id != null);
         const handIds = allTiles.map(t => t.id);
 
-        // ★追加: 親の思想セット判定（ボーナス役として処理）
+        // 親の思想セット判定（ボーナス役として処理）
         if (thoughtTiles.length === 2) {
             const thoughtMatchCount = thoughtTiles.filter(t => handIds.includes(t.id)).length;
             if (thoughtMatchCount === 2) {
@@ -523,13 +526,13 @@
         html += `<div class="absolute inset-0 opacity-40 ${seriesColors[tile.series].split(' ')[0]} rounded pointer-events-none"></div>`;
         
         if (tile.grade) {
-            html += `<span class="absolute top-[1px] left-[2px] font-bold z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
+            html += `<span class="absolute top-[1px] left-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${tile.grade}年</span>`;
         }
         
         if (tile.birthMonth || tile.series === 'musical') {
             const topRightText = getMonthOrSchoolText(tile);
             if (topRightText) {
-                html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 font-bold leading-none tracking-tighter">${topRightText}</span>`;
+                html += `<span class="absolute top-[1px] right-[2px] z-10 text-[10px] sm:text-[12px] text-gray-700 leading-none tracking-tighter">${topRightText}</span>`;
             }
         }
         
@@ -802,7 +805,7 @@
 
     // --- 描画ロジック ---
     function renderApp() {
-        renderThoughtArea(); // ★追加
+        renderThoughtArea();
         renderHand();
         renderResult();
         
@@ -885,7 +888,7 @@
                 else if (greenMatchCount === 8) uStatus.reach.push("緑一色");
             }
 
-            // ★追加: 思想セットバッジの追加
+            // 思想セットバッジの追加
             if (thoughtTiles.length === 2 && thoughtTiles.some(tt => tt.id === tile.id)) {
                 if (thoughtMatchCount >= 2) uStatus.complete.push("思想");
                 else if (thoughtMatchCount === 1) uStatus.reach.push("思想");
@@ -897,7 +900,7 @@
             if (inputMode === 'visible') {
                 extraClasses += " ring-2 ring-red-300";
             } else if (inputMode === 'thought') {
-                extraClasses += " opacity-50 grayscale pointer-events-none"; // 思想モード時は手牌を触れないように
+                extraClasses += " opacity-50 grayscale pointer-events-none";
             }
 
             html += createCompactTileHTML(tile, onClick, extraClasses, mCount, gCount, musCount, uStatus);
