@@ -1,9 +1,0 @@
-{
-  "name": "ldneo-assistant",
-  "version": "2.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test"
-  }
-}
