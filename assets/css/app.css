@@ -14,3 +14,10 @@
 .role-toggle.is-off { background:#cbd5e1; }
 .role-toggle.is-on::after { transform:translateX(18px); }
 body.modal-open { overflow:hidden; }
+
+.role-tile-summary.is-collapsed {
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
+}

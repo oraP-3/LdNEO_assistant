@@ -14,7 +14,8 @@ const state = {
   inputMode:'hand',
   isOya:true,
   settings:loadSettings(tiles),
-  roleSearch:''
+  roleSearch:'',
+  expandedRoleIds:new Set()
 };
 
 const editor = {
@@ -76,7 +77,7 @@ function getShortName(fullName) {
     'Liella! ロゴ':'Liella', 'ミュージカル ロゴ':'スクミュ', '蓮ノ空 ロゴ':'蓮ノ空',
     'イキヅライブ ロゴ':'イキヅ', '音ノ木坂学院 校章':'音ノ木', '浦の星女学院 校章':'浦女',
     '虹ヶ咲学園 校章':'虹ヶ咲', '結ヶ丘女子 校章':'結女', '椿咲花・滝桜 校章':'椿滝桜',
-    '蓮ノ空 校章':'蓮ノ空', 'N高 校章':'N高', 'エマ・ヴェルデ':'エマ',
+    '蓮ノ空 校章':'蓮ノ空', 'L高 校章':'L高', 'エマ・ヴェルデ':'エマ',
     'ミア・テイラー':'ミア', 'ウィーン・マルガレーテ':'ウィーン', 'セラス 柳田 リリエンフェルト':'セラス'
   };
   if (shortNames[fullName]) return shortNames[fullName];
@@ -434,20 +435,135 @@ function removeHandTile(index){
   renderApp();
 }
 
-function roleGroupOrder(group){return ['basic','special','unit','grade','month','thought','custom'].indexOf(group);}
+const ROLE_GROUP_ORDER = ['unit','thought','custom','special','month','grade','basic'];
+const UNIT_SUBGROUP_ORDER = ['muse','aqours','nijigasaki','liella','hasunosora','musical','ikizulive','cross'];
+const UNIT_SUBGROUP_LABELS = {
+  muse:"μ's",
+  aqours:'Aqours',
+  nijigasaki:'虹ヶ咲学園',
+  liella:'Liella!',
+  hasunosora:'蓮ノ空',
+  musical:'スクミュ',
+  ikizulive:'イキヅライブ！',
+  cross:'越境ユニット'
+};
+
+const tileById = new Map(tiles.map(tile=>[tile.id,tile]));
+const tileByCharacterId = new Map(tiles.filter(tile=>tile.characterId).map(tile=>[tile.characterId,tile]));
+
+function roleGroupOrder(group){
+  const index=ROLE_GROUP_ORDER.indexOf(group);
+  return index<0?ROLE_GROUP_ORDER.length:index;
+}
+
+function getRoleRuleTiles(role){
+  const rule=role.rule||{};
+  if(rule.type==='exactHand')return (rule.requiredTileIds||[]).map(id=>tileById.get(id)).filter(Boolean);
+  if(rule.type==='fixedSet'){
+    const map=rule.keyType==='tileId'?tileById:tileByCharacterId;
+    return (rule.requiredKeys||[]).map(key=>map.get(key)).filter(Boolean);
+  }
+  return [];
+}
+
+function getUnitSubgroup(role){
+  const series=[...new Set(getRoleRuleTiles(role).map(tile=>tile.series))];
+  return series.length===1&&UNIT_SUBGROUP_ORDER.includes(series[0])?series[0]:'cross';
+}
+
+function roleSortValue(role,indexMap){
+  if(role.group==='month')return Number(role.rule?.value)||99;
+  if(role.group==='grade'){
+    const grade=Number(role.rule?.value)||99;
+    const complete=role.id.endsWith('.complete')?1:0;
+    return grade*10+complete;
+  }
+  if(role.group==='unit'){
+    return UNIT_SUBGROUP_ORDER.indexOf(getUnitSubgroup(role))*1000+(indexMap.get(role.id)||0);
+  }
+  return indexMap.get(role.id)||0;
+}
+
+function getRoleTileDetail(role){
+  const rule=role.rule||{};
+  if(rule.type==='allLogoSchool'){
+    return { names:'ロゴ牌・校章牌', condition:`${rule.requiredCount||9}牌すべて`, count:rule.requiredCount||9 };
+  }
+  const roleTiles=getRoleRuleTiles(role);
+  if(roleTiles.length===0)return null;
+  const names=roleTiles.map(tile=>getShortName(tile.name)).join('・');
+  if(rule.type==='exactHand'){
+    return {names,condition:'指定9牌すべて',count:roleTiles.length};
+  }
+  if(rule.type==='fixedSet'){
+    const requiredCount=Number(rule.requiredCount??roleTiles.length);
+    const condition=requiredCount===roleTiles.length
+      ? `指定${roleTiles.length}牌すべて`
+      : `候補${roleTiles.length}牌中${requiredCount}牌以上`;
+    return {names,condition,count:roleTiles.length};
+  }
+  return null;
+}
+
+function shouldShowRoleTiles(role){
+  return role.group==='unit'||role.group==='custom'||role.category==='standalone';
+}
+
+function renderRoleTileDetail(role){
+  if(!shouldShowRoleTiles(role))return '';
+  const detail=getRoleTileDetail(role);
+  if(!detail)return '';
+  const expandable=detail.count>6||detail.names.length>36;
+  const expanded=state.expandedRoleIds.has(role.id);
+  return `<div class="mt-1">
+    <div class="role-tile-summary text-[9px] md:text-[10px] leading-relaxed text-gray-600 ${expandable&&!expanded?'is-collapsed':''}">${escapeHTML(detail.names)}</div>
+    <div class="flex items-center gap-2 mt-0.5">
+      <span class="text-[8px] md:text-[9px] font-bold text-gray-400">${escapeHTML(detail.condition)}</span>
+      ${expandable?`<button type="button" data-expand-role="${escapeAttr(role.id)}" class="text-[8px] md:text-[9px] font-bold text-blue-600 hover:underline">${expanded?'閉じる':'全牌を表示'}</button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderRoleRow(role){
+  const enabled=isEnabled(state.settings,role.id);
+  const typeLabel=role.category==='standalone'?'特殊役':role.category==='base'?'基本役':'加点役';
+  return `<div class="flex items-start gap-2 p-2.5 ${enabled?'':'opacity-60'}">
+    <button type="button" data-toggle-role="${escapeAttr(role.id)}" aria-pressed="${enabled}" class="role-toggle ${enabled?'is-on':'is-off'} mt-0.5" title="${enabled?'計算対象':'計算対象外'}"></button>
+    <div class="flex-grow min-w-0">
+      <div class="flex items-baseline justify-between gap-2">
+        <div class="font-bold text-xs md:text-sm min-w-0 break-words">${escapeHTML(role.name)}</div>
+        <div class="text-[9px] md:text-[10px] text-gray-500 whitespace-nowrap">${role.score.toLocaleString()}ジャラ</div>
+      </div>
+      <div class="text-[9px] md:text-[10px] text-gray-400">${typeLabel}</div>
+      ${renderRoleTileDetail(role)}
+      ${role.builtIn?'':`<div class="flex gap-1 mt-1.5 flex-wrap"><button data-edit-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">編集</button><button data-duplicate-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-gray-100 text-gray-700 text-[10px] font-bold">複製</button><button data-delete-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-red-50 text-red-700 text-[10px] font-bold">削除</button></div>`}
+    </div>
+  </div>`;
+}
+
+function renderUnitRoleGroup(items){
+  const subgroups=new Map(UNIT_SUBGROUP_ORDER.map(key=>[key,[]]));
+  items.forEach(role=>subgroups.get(getUnitSubgroup(role)).push(role));
+  return [...subgroups.entries()].filter(([,roles])=>roles.length).map(([key,roles])=>`
+    <section class="border-t first:border-t-0 border-gray-200">
+      <div class="px-3 py-1.5 bg-slate-50 text-[10px] md:text-xs font-black text-gray-600">${escapeHTML(UNIT_SUBGROUP_LABELS[key])} <span class="font-normal text-gray-400">(${roles.length})</span></div>
+      <div class="divide-y">${roles.map(renderRoleRow).join('')}</div>
+    </section>`).join('');
+}
+
 function renderRoleSettings(){
   const query=state.roleSearch.trim().toLowerCase();
-  const roles=allRoles().filter(role=>!query||role.name.toLowerCase().includes(query)).sort((a,b)=>roleGroupOrder(a.group)-roleGroupOrder(b.group)||a.name.localeCompare(b.name,'ja'));
-  const groups=new Map(); roles.forEach(role=>{if(!groups.has(role.group))groups.set(role.group,[]);groups.get(role.group).push(role);});
-  $('role-list').innerHTML=[...groups.entries()].map(([group,items])=>`<details open class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"><summary class="cursor-pointer px-3 py-2 bg-gray-50 font-black text-xs md:text-sm text-gray-700">${escapeHTML(groupLabels[group]||group)} <span class="text-gray-400 font-normal">(${items.length})</span></summary><div class="divide-y">${items.map(role=>{
-    const enabled=isEnabled(state.settings,role.id);
-    const typeLabel=role.category==='standalone'?'特殊役':role.category==='base'?'基本役':'加点役';
-    return `<div class="flex items-center gap-2 p-2.5 ${enabled?'':'opacity-60'}">
-      <button type="button" data-toggle-role="${escapeAttr(role.id)}" aria-pressed="${enabled}" class="role-toggle ${enabled?'is-on':'is-off'}" title="${enabled?'計算対象':'計算対象外'}"></button>
-      <div class="flex-grow min-w-0"><div class="font-bold text-xs md:text-sm truncate">${escapeHTML(role.name)}</div><div class="text-[9px] md:text-[10px] text-gray-500">${typeLabel}・${role.score.toLocaleString()}ジャラ</div></div>
-      ${role.builtIn?'':`<div class="flex gap-1"><button data-edit-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">編集</button><button data-duplicate-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-gray-100 text-gray-700 text-[10px] font-bold">複製</button><button data-delete-role="${escapeAttr(role.id)}" class="px-2 py-1 rounded bg-red-50 text-red-700 text-[10px] font-bold">削除</button></div>`}
-    </div>`;
-  }).join('')}</div></details>`).join('')||'<div class="text-center text-gray-400 text-sm py-10">該当する役はありません。</div>';
+  const source=allRoles();
+  const indexMap=new Map(source.map((role,index)=>[role.id,index]));
+  const roles=source
+    .filter(role=>!query||role.name.toLowerCase().includes(query)||getRoleTileDetail(role)?.names.toLowerCase().includes(query))
+    .sort((a,b)=>roleGroupOrder(a.group)-roleGroupOrder(b.group)||roleSortValue(a,indexMap)-roleSortValue(b,indexMap));
+  const groups=new Map();
+  roles.forEach(role=>{if(!groups.has(role.group))groups.set(role.group,[]);groups.get(role.group).push(role);});
+  $('role-list').innerHTML=[...groups.entries()].map(([group,items])=>{
+    const body=group==='unit'?renderUnitRoleGroup(items):`<div class="divide-y">${items.map(renderRoleRow).join('')}</div>`;
+    return `<details open class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"><summary class="cursor-pointer px-3 py-2 bg-gray-50 font-black text-xs md:text-sm text-gray-700">${escapeHTML(groupLabels[group]||group)} <span class="text-gray-400 font-normal">(${items.length})</span></summary>${body}</details>`;
+  }).join('')||'<div class="text-center text-gray-400 text-sm py-10">該当する役はありません。</div>';
   const basics=['base.one_series','base.three_series'];
   $('basic-role-warning').classList.toggle('hidden',basics.some(id=>isEnabled(state.settings,id)));
 }
@@ -464,7 +580,7 @@ function setEditorType(category){
   $('bonus-condition-panel').classList.toggle('hidden',category==='standalone');
   $('special-description').classList.toggle('hidden',category!=='standalone');
   if(category==='standalone'&&editor.selectedTileIds.size>9){editor.selectedTileIds=new Set([...editor.selectedTileIds].slice(0,9));showToast('特殊役は9枚までのため、先頭の9枚を残しました。','info');}
-  renderEditorPalette(); renderEditorCount();
+  renderEditorTabs(); renderEditorPalette(); renderEditorCount(); renderEditorSelectedTiles();
 }
 
 function openRoleEditor(role=null,{duplicate=false}={}){
@@ -473,6 +589,8 @@ function openRoleEditor(role=null,{duplicate=false}={}){
     editor.roleId=duplicate?generateCustomRoleId():role.id;
     editor.category=role.category;
     editor.selectedTileIds=new Set(role.category==='standalone'?role.rule.requiredTileIds:role.rule.requiredKeys);
+    const firstSelectedTile=tiles.find(tile=>editor.selectedTileIds.has(tile.id));
+    editor.activeTab=firstSelectedTile?.series||'muse';
     $('custom-role-name').value=duplicate?`${role.name}（コピー）`:role.name;
     $('custom-role-score').value=role.score;
     if(role.category==='bonus'){
@@ -485,13 +603,21 @@ function openRoleEditor(role=null,{duplicate=false}={}){
     editor.roleId=generateCustomRoleId(); editor.category='bonus'; editor.selectedTileIds=new Set(); editor.activeTab='muse';
     $('custom-role-name').value=''; $('custom-role-score').value='90000'; $('custom-role-condition').value='all'; $('custom-role-required-count').value='3'; $('role-editor-title').textContent='役を追加';
   }
-  setEditorType(editor.category); updateConditionUI(); renderEditorTabs(); renderEditorPalette(); renderEditorCount();
+  setEditorType(editor.category); updateConditionUI(); renderEditorTabs(); renderEditorPalette(); renderEditorCount(); renderEditorSelectedTiles();
   $('role-editor-modal').classList.remove('hidden'); document.body.classList.add('modal-open');
 }
 function closeRoleEditor(){ $('role-editor-modal').classList.add('hidden'); if($('role-settings-modal').classList.contains('hidden'))document.body.classList.remove('modal-open'); }
 
 function renderEditorTabs(){
-  $('editor-series-tabs').innerHTML=Object.entries(seriesNames).map(([key,name])=>`<button type="button" data-editor-series="${key}" class="px-3 md:px-4 py-2 font-bold text-[10px] md:text-sm whitespace-nowrap ${editor.activeTab===key?'bg-white text-blue-600 border-b-2 border-blue-600':'bg-gray-100 text-gray-500'}">${escapeHTML(name)}</button>`).join('');
+  const selectedCounts={};
+  for(const tileId of editor.selectedTileIds){
+    const tile=tileById.get(tileId);
+    if(tile)selectedCounts[tile.series]=(selectedCounts[tile.series]||0)+1;
+  }
+  $('editor-series-tabs').innerHTML=Object.entries(seriesNames).map(([key,name])=>{
+    const count=selectedCounts[key]||0;
+    return `<button type="button" data-editor-series="${key}" class="px-3 md:px-4 py-2 font-bold text-[10px] md:text-sm whitespace-nowrap ${editor.activeTab===key?'bg-white text-blue-600 border-b-2 border-blue-600':'bg-gray-100 text-gray-500'}">${escapeHTML(name)}${count?` <span class="inline-flex min-w-4 h-4 px-1 items-center justify-center rounded-full bg-blue-600 text-white text-[8px] align-middle">${count}</span>`:''}</button>`;
+  }).join('');
 }
 function renderEditorPalette(){
   $('editor-tile-palette').innerHTML=tiles.filter(tile=>tile.series===editor.activeTab).map(tile=>{
@@ -508,6 +634,18 @@ function renderEditorCount(){
   if($('custom-role-condition').value==='all')$('custom-role-required-count').value=count||1;
   $('custom-role-required-count').max=Math.min(9,Math.max(1,count));
 }
+function renderEditorSelectedTiles(){
+  const selectedTiles=tiles.filter(tile=>editor.selectedTileIds.has(tile.id)).sort((a,b)=>a.id.localeCompare(b.id));
+  if(selectedTiles.length===0){
+    $('editor-selected-tiles').innerHTML='<span class="text-[10px] text-gray-400 px-1">まだ指定されていません</span>';
+    return;
+  }
+  $('editor-selected-tiles').innerHTML=selectedTiles.map(tile=>{
+    const {bg,border,text}=seriesClassParts(tile);
+    return `<button type="button" data-remove-editor-selected="${escapeAttr(tile.id)}" class="shrink-0 inline-flex items-center gap-1 border ${border} ${bg} ${text} rounded-full px-2 py-1 text-[9px] md:text-[10px] font-bold shadow-sm" title="選択解除">${escapeHTML(getShortName(tile.name))}<span class="text-xs leading-none opacity-70">×</span></button>`;
+  }).join('');
+}
+
 function updateConditionUI(){
   const countMode=$('custom-role-condition').value==='count';
   $('required-count-label').classList.toggle('hidden',!countMode);
@@ -560,6 +698,7 @@ function attachEvents(){
   $('role-list').addEventListener('click',event=>{
     const toggle=event.target.closest('[data-toggle-role]');
     if(toggle){const id=toggle.dataset.toggleRole;setRoleEnabled(state.settings,id,!isEnabled(state.settings,id));saveSettings(state.settings);renderRoleSettings();renderApp();return;}
+    const expand=event.target.closest('[data-expand-role]');if(expand){const id=expand.dataset.expandRole;if(state.expandedRoleIds.has(id))state.expandedRoleIds.delete(id);else state.expandedRoleIds.add(id);renderRoleSettings();return;}
     const edit=event.target.closest('[data-edit-role]');if(edit){const role=state.settings.customRoles.find(item=>item.id===edit.dataset.editRole);if(role)openRoleEditor(role);return;}
     const duplicate=event.target.closest('[data-duplicate-role]');if(duplicate){const role=state.settings.customRoles.find(item=>item.id===duplicate.dataset.duplicateRole);if(role)openRoleEditor(clone(role),{duplicate:true});return;}
     const del=event.target.closest('[data-delete-role]');if(del){const role=state.settings.customRoles.find(item=>item.id===del.dataset.deleteRole);if(role)openConfirm('役を削除',`「${role.name}」を削除しますか？`,()=>{deleteCustomRole(state.settings,role.id);saveSettings(state.settings);closeConfirm();renderRoleSettings();renderApp();showToast('役を削除しました。','success');});}
@@ -569,7 +708,8 @@ function attachEvents(){
   document.querySelectorAll('.role-type-button').forEach(button=>button.addEventListener('click',()=>setEditorType(button.dataset.roleType)));
   $('custom-role-condition').addEventListener('change',()=>{updateConditionUI();renderEditorCount();});
   $('editor-series-tabs').addEventListener('click',event=>{const button=event.target.closest('[data-editor-series]');if(button){editor.activeTab=button.dataset.editorSeries;renderEditorTabs();renderEditorPalette();}});
-  $('editor-tile-palette').addEventListener('click',event=>{const button=event.target.closest('[data-editor-tile]');if(!button||button.disabled)return;const id=button.dataset.editorTile;if(editor.selectedTileIds.has(id))editor.selectedTileIds.delete(id);else{if(editor.category==='standalone'&&editor.selectedTileIds.size>=9){showToast('特殊役は9枚ちょうどを指定します。');return;}editor.selectedTileIds.add(id);}renderEditorPalette();renderEditorCount();});
+  $('editor-tile-palette').addEventListener('click',event=>{const button=event.target.closest('[data-editor-tile]');if(!button||button.disabled)return;const id=button.dataset.editorTile;if(editor.selectedTileIds.has(id))editor.selectedTileIds.delete(id);else{if(editor.category==='standalone'&&editor.selectedTileIds.size>=9){showToast('特殊役は9枚ちょうどを指定します。');return;}editor.selectedTileIds.add(id);}renderEditorTabs();renderEditorPalette();renderEditorCount();renderEditorSelectedTiles();});
+  $('editor-selected-tiles').addEventListener('click',event=>{const button=event.target.closest('[data-remove-editor-selected]');if(!button)return;editor.selectedTileIds.delete(button.dataset.removeEditorSelected);renderEditorTabs();renderEditorPalette();renderEditorCount();renderEditorSelectedTiles();});
   $('score-minus').addEventListener('click',()=>{$('custom-role-score').value=Math.max(SCORE_STEP,Number($('custom-role-score').value||SCORE_STEP)-SCORE_STEP);});
   $('score-plus').addEventListener('click',()=>{$('custom-role-score').value=Number($('custom-role-score').value||0)+SCORE_STEP;});
   $('save-custom-role').addEventListener('click',saveEditorRole);

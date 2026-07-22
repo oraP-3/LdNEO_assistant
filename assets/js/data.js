@@ -88,7 +88,7 @@ export const tiles = [
   { id:'t81', type:'character', series:'ikizulive', characterId:'ikizu_midori', name:'山田 真緑', grade:1, unit:'Plumina', birthMonth:5, hasSpecial:false },
   { id:'t82', type:'character', series:'ikizulive', characterId:'ikizu_shion', name:'佐々木 翔音', grade:1, unit:'SH1ON', birthMonth:11, hasSpecial:false },
   { id:'t83', type:'logo', series:'ikizulive', characterId:null, name:'イキヅライブ ロゴ', grade:null, unit:null, birthMonth:null, hasSpecial:false },
-  { id:'t84', type:'school', series:'ikizulive', characterId:null, name:'N高 校章', grade:null, unit:null, birthMonth:null, hasSpecial:false }
+  { id:'t84', type:'school', series:'ikizulive', characterId:null, name:'L高 校章', grade:null, unit:null, birthMonth:null, hasSpecial:false }
 ];
 
 export const seriesNames = {
@@ -191,5 +191,5 @@ export const groupLabels = {
   grade:'学年',
   month:'誕生月',
   thought:'親の思想',
-  custom:'カスタム役'
+  custom:'追加役'
 };
