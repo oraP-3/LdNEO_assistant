@@ -1,0 +1,12 @@
+c9bf3ffe3bcd6362b27e71fb9a4fee1014dd1a7f734aefe067175813a7845fc7  ./CHANGELOG.md
+7e1105bde9f9ee4cf105c215227b0a338e50f63bcaf4be8003670f4cc6beab6a  ./README.md
+418061bca1cefb5859bca727bafc5db5cccd196c7e947cb8362cc48ad62bae64  ./SPECIFICATION.md
+d883b018c0299fa845802333a460953c862b5cad465bea231f3ac9e38110c80f  ./TEST_RESULTS.md
+4d64a5af6f0c43d3af035846f477ead0a4d1aeb1a65c5dfb16c6ee733316f13f  ./assets/css/app.css
+b05fff286dab28d79454abafae63bb7fa65ed646e3ae0d498bd4220e99468eb7  ./assets/js/app.js
+42cfc6c22bd319a6c0b49dca7030c897d1e37c0a58888e77e69204e70fd7cdfc  ./assets/js/data.js
+5483af40869ace891f46bca0b878f94043139ac672c1ff2a07d7b11348b952c2  ./assets/js/role-engine.js
+8e5e2e7eed4ecbbfc2ee3f5aa944029689d43f90dcf4c3f043509485b5ada00a  ./assets/js/role-store.js
+12cc17ec4e6d2ce5f968e9293ad716889dbd72e94a060fd938432db0910c0d3c  ./index.html
+dceb29b2d2b7ca918f9a5f7770c8f237e21d8cf1bf7de5fe98497f06ca028f63  ./package.json
+19f85bb3c183ca538f3ed7e1b67d3c8c639cd83a598e40210e82ac690b87e1c0  ./tests/role-engine.test.js
