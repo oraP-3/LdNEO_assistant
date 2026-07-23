@@ -1,5 +1,6 @@
 import { tiles, seriesNames, seriesColors, defaultRoles, groupLabels } from './data.js';
 import { evaluateHand, checkMachi, isRoleEnabled, validateCustomRole, SCORE_STEP } from './role-engine.js';
+import { analyzeDiscardCandidates } from './position-analyzer.js';
 import {
   loadSettings, saveSettings, resetSettings, getAllRoles, setRoleEnabled,
   isEnabled, normalizeCustomRole, upsertCustomRole, deleteCustomRole,
@@ -358,50 +359,58 @@ function renderResult() {
     agariHtml=`<div class="bg-gray-100 p-2 rounded text-center text-gray-600 font-bold mb-2 border border-gray-300">${reason}</div>`;
   }
 
-  let candidates=[];
-  const tested=new Set();
-  state.selectedHand.forEach((discard,index)=>{
-    if (tested.has(discard.id)) return;
-    tested.add(discard.id);
-    const hand8=[...state.selectedHand]; hand8.splice(index,1);
-    const machi=checkMachi(hand8,calcContext(),[discard.id]);
-    if (machi.count===0) return;
-    const availableGroups=machi.groups.filter(group=>group.tiles.some(item=>!item.isJunkara));
-    const hasAvailable=availableGroups.length>0;
-    const maxScore=Math.max(...(hasAvailable?availableGroups:machi.groups).map(group=>group.score));
-    candidates.push({discard,machi,hasAvailable,maxScore});
-  });
+  const analysis=analyzeDiscardCandidates(state.selectedHand,calcContext());
+  let candidates=[...analysis.candidates];
   let globalMaxScore=0,globalMaxAvailable=0;
-  candidates.forEach(item=>{if(item.hasAvailable){globalMaxScore=Math.max(globalMaxScore,item.maxScore);globalMaxAvailable=Math.max(globalMaxAvailable,item.machi.availableCount);}});
+  candidates.forEach(item=>{
+    if(item.availableWinningTileCount>0){
+      globalMaxAvailable=Math.max(globalMaxAvailable,item.availableWinningTileCount);
+      item.winningTiles.forEach(wait=>{if(!wait.isJunkara)globalMaxScore=Math.max(globalMaxScore,wait.totalScore);});
+    }
+  });
   candidates.sort((a,b)=>{
-    if(a.hasAvailable!==b.hasAvailable)return a.hasAvailable?-1:1;
-    const abest=(a.maxScore===globalMaxScore&&a.maxScore>0)||(a.machi.availableCount===globalMaxAvailable&&globalMaxAvailable>0);
-    const bbest=(b.maxScore===globalMaxScore&&b.maxScore>0)||(b.machi.availableCount===globalMaxAvailable&&globalMaxAvailable>0);
+    const aHasAvailable=a.availableWinningTileCount>0;
+    const bHasAvailable=b.availableWinningTileCount>0;
+    const aMax=Math.max(0,...a.winningTiles.filter(wait=>!wait.isJunkara).map(wait=>wait.totalScore));
+    const bMax=Math.max(0,...b.winningTiles.filter(wait=>!wait.isJunkara).map(wait=>wait.totalScore));
+    if(aHasAvailable!==bHasAvailable)return aHasAvailable?-1:1;
+    const abest=(aMax===globalMaxScore&&aMax>0)||(a.availableWinningTileCount===globalMaxAvailable&&globalMaxAvailable>0);
+    const bbest=(bMax===globalMaxScore&&bMax>0)||(b.availableWinningTileCount===globalMaxAvailable&&globalMaxAvailable>0);
     if(abest!==bbest)return abest?-1:1;
-    return b.maxScore-a.maxScore||b.machi.availableCount-a.machi.availableCount;
+    return bMax-aMax||b.availableWinningTileCount-a.availableWinningTileCount;
   });
   let assist='<div class="font-bold text-gray-700 text-xs md:text-sm mb-1.5 border-b-2 border-gray-300 pb-0.5">どれか1枚を捨てた場合の待ち牌候補</div>';
-  if(candidates.length===0) assist+='<div class="text-[10px] md:text-xs text-gray-500 text-center py-2">1枚捨ててアガリ形（待ち）になる牌はありません。</div>';
+  if(candidates.length===0) assist+='<div class="text-[10px] md:text-xs text-gray-500 text-center py-2">切り牌候補を計算できません。</div>';
   else candidates.forEach(item=>{
-    const all=[];
-    item.machi.groups.forEach(group=>group.tiles.forEach(obj=>{if(!all.some(x=>x.tile.id===obj.tile.id))all.push({tile:obj.tile,isJunkara:obj.isJunkara,score:group.score});}));
-    all.sort((a,b)=>a.isJunkara!==b.isJunkara?(a.isJunkara?1:-1):b.score-a.score);
-    const highest=item.hasAvailable&&item.maxScore===globalMaxScore&&item.maxScore>0;
-    const widest=item.hasAvailable&&item.machi.availableCount===globalMaxAvailable&&globalMaxAvailable>0;
+    const waits=[...item.winningTiles].sort((a,b)=>a.isJunkara!==b.isJunkara?(a.isJunkara?1:-1):b.totalScore-a.totalScore);
+    const hasAvailable=item.availableWinningTileCount>0;
+    const maxScore=Math.max(0,...(hasAvailable?waits.filter(wait=>!wait.isJunkara):waits).map(wait=>wait.totalScore));
+    const highest=hasAvailable&&maxScore===globalMaxScore&&maxScore>0;
+    const widest=hasAvailable&&item.availableWinningTileCount===globalMaxAvailable&&globalMaxAvailable>0;
     const badges=[];
-    if(currentScore>0&&item.maxScore>currentScore)badges.push('<span class="bg-red-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm animate-pulse font-black whitespace-nowrap">点数UP！</span>');
+    if(currentScore>0&&maxScore>currentScore)badges.push('<span class="bg-red-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm animate-pulse font-black whitespace-nowrap">点数UP！</span>');
+    if(item.isJunkara)badges.push('<span class="bg-gray-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black whitespace-nowrap">純カラ</span>');
     if(highest&&widest)badges.push('<span class="bg-orange-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-orange-600 whitespace-nowrap">最高打点 & 最広待ち</span>');
     else {if(highest)badges.push('<span class="bg-yellow-400 text-yellow-900 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-yellow-500 whitespace-nowrap">最高打点</span>');if(widest)badges.push('<span class="bg-blue-500 text-white text-[8px] md:text-[9px] px-1.5 py-0.5 rounded shadow-sm font-black border border-blue-600 whitespace-nowrap">最広待ち</span>');}
-    let wrapper='flex items-center p-1.5 md:p-2 rounded shadow-sm border mb-1.5 ';
-    if(!item.hasAvailable)wrapper+='bg-gray-100 border-gray-300 opacity-80';
-    else if(currentScore>0&&item.maxScore>currentScore)wrapper+='bg-red-50 border-red-300 ring-1 ring-red-300';
+    let wrapper='flex items-start p-1.5 md:p-2 rounded shadow-sm border mb-1.5 ';
+    if(!hasAvailable)wrapper+='bg-gray-100 border-gray-300 opacity-90';
+    else if(currentScore>0&&maxScore>currentScore)wrapper+='bg-red-50 border-red-300 ring-1 ring-red-300';
     else if(highest||widest)wrapper+='bg-yellow-50 border-yellow-400 ring-1 ring-yellow-400';
     else wrapper+='bg-white border-gray-200';
+    const waitSummary=waits.length===0
+      ? '<div class="text-[10px] md:text-xs text-gray-500 font-bold py-1">直接のアガリ待ちなし</div>'
+      : waits.map(wait=>{
+        const rolesText=wait.matchedRoles.length?wait.matchedRoles.map(role=>`${escapeHTML(role.name)} (${role.score.toLocaleString()})`).join('、'):'成立役なし';
+        return `<div class="border-t border-gray-200/70 pt-1 mt-1">
+          <div class="flex flex-wrap items-center gap-x-1">${createSmallTileHTML(wait.tile,wait.isJunkara)}<span class="text-[9px] md:text-[10px] ${wait.isJunkara?'text-gray-500':'text-red-600'} font-bold ml-1 whitespace-nowrap">合計点 ${wait.totalScore.toLocaleString()}</span>${wait.isJunkara?'<span class="text-[8px] bg-gray-500 text-white px-1 py-0.5 rounded font-bold whitespace-nowrap">純カラ</span>':''}</div>
+          <div class="text-[9px] md:text-[10px] text-gray-600 leading-snug mt-1"><span class="font-bold text-gray-700">成立役:</span> ${rolesText}</div>
+        </div>`;
+      }).join('');
     assist+=`<div class="${wrapper}">
-      <div class="flex flex-col items-center mr-2 md:mr-3 shrink-0"><span class="text-[8px] text-gray-500 font-bold mb-0.5">これを捨てる</span>${createCompactTileHTML(item.discard,{fixedWidth:true})}</div>
+      <div class="flex flex-col items-center mr-2 md:mr-3 shrink-0"><span class="text-[8px] text-gray-500 font-bold mb-0.5">これを捨てる</span>${createCompactTileHTML(item.discardTile,{fixedWidth:true})}</div>
       <div class="flex flex-col flex-grow min-w-0">
-        <div class="flex justify-between items-start md:items-center mb-0.5 border-b border-gray-100 pb-0.5 flex-col md:flex-row gap-1 md:gap-0"><div class="flex items-center flex-wrap gap-y-1"><span class="text-[10px] md:text-xs font-bold ${item.machi.availableCount>0?'text-blue-700':'text-red-500'} whitespace-nowrap">残り ${item.machi.availableCount} 枚</span>${badges.length?`<div class="flex gap-1 ml-1 md:ml-2 flex-wrap">${badges.join('')}</div>`:''}</div><span class="text-[9px] md:text-[10px] ${item.hasAvailable?'text-red-600':'text-gray-500'} font-bold whitespace-nowrap">${item.hasAvailable?'最大 ':'(純カラ) 最大 '}${item.maxScore.toLocaleString()}</span></div>
-        <div class="flex flex-wrap items-center">${all.slice(0,5).map(obj=>createSmallTileHTML(obj.tile,obj.isJunkara)).join('')}${all.length>5?`<div class="text-[9px] text-gray-500 ml-1 self-end mb-1 whitespace-nowrap">他 ${all.length-5}種</div>`:''}</div>
+        <div class="flex justify-between items-start md:items-center mb-0.5 border-b border-gray-100 pb-0.5 flex-col md:flex-row gap-1 md:gap-0"><div class="flex items-center flex-wrap gap-y-1"><span class="text-[10px] md:text-xs font-bold ${hasAvailable?'text-blue-700':'text-red-500'} whitespace-nowrap">場に見えていない待ち牌 ${item.availableWinningTileCount} 枚</span>${badges.length?`<div class="flex gap-1 ml-1 md:ml-2 flex-wrap">${badges.join('')}</div>`:''}</div><span class="text-[9px] md:text-[10px] ${hasAvailable?'text-red-600':'text-gray-500'} font-bold whitespace-nowrap">${maxScore>0?`最大 ${maxScore.toLocaleString()}`:'直接のアガリ待ちなし'}</span></div>
+        ${waitSummary}
       </div>
     </div>`;
   });

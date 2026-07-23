@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { tiles, defaultRoles } from '../assets/js/data.js';
 import { evaluateHand, checkMachi, validateCustomRole } from '../assets/js/role-engine.js';
 import { analyzeDiscardCandidates } from '../assets/js/position-analyzer.js';
@@ -209,4 +210,12 @@ test('直接アガリにならない9牌でも9件の空待ち候補を返す',(
     assert.equal(candidate.availableWinningTileCount,0);
     assert.equal(candidate.isJunkara,false);
   }
+});
+
+test('app.jsの9牌時候補計算はanalyzeDiscardCandidatesへ一本化する',()=>{
+  const source=readFileSync(new URL('../assets/js/app.js',import.meta.url),'utf8');
+  assert.match(source,/import \{ analyzeDiscardCandidates \} from '\.\/position-analyzer\.js';/);
+  assert.match(source,/analyzeDiscardCandidates\(state\.selectedHand,calcContext\(\)\)/);
+  assert.doesNotMatch(source,/const hand8=\[\.\.\.state\.selectedHand\]/);
+  assert.doesNotMatch(source,/checkMachi\(hand8,calcContext\(\),\[discard\.id\]\)/);
 });
