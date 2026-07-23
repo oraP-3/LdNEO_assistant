@@ -191,3 +191,63 @@ test('カスタム役を含む結果もJSON.stringify / JSON.parseを往復で�
   });
   assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
 });
+
+function assertJsonRoundTrips(value) {
+  assert.deepEqual(JSON.parse(JSON.stringify(value)), value);
+}
+
+test('BigIntを含む不正入力でもJSON.stringifyできる', () => {
+  const result = analyzePosition({ schemaVersion:1n, handTileIds:['t01'] });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].value, '1n');
+  assertJsonRoundTrips(result);
+});
+
+test('functionを含む不正入力でもJSON.stringifyできる', () => {
+  const result = analyzePosition({ schemaVersion:'1.0', handTileIds:['t01'], disabledRoleIds:() => true });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(item => item.value === '[Function]'), true);
+  assertJsonRoundTrips(result);
+});
+
+test('Symbolを含む不正入力でもJSON.stringifyできる', () => {
+  const result = analyzePosition({ schemaVersion:Symbol('bad'), handTileIds:['t01'] });
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].value, 'Symbol(bad)');
+  assertJsonRoundTrips(result);
+});
+
+test('循環参照を含む不正入力でもJSON.stringifyできる', () => {
+  const circular = { kind:'bad' };
+  circular.self = circular;
+  const result = analyzePosition({ schemaVersion:'1.0', handTileIds:['t01'], disabledRoleIds:circular });
+  assert.equal(result.ok, false);
+  const fieldError = result.errors.find(item => item.field === 'disabledRoleIds');
+  assert.deepEqual(fieldError.value, { kind:'bad', self:'[Circular]' });
+  assertJsonRoundTrips(result);
+});
+
+test('NaN / Infinityを含む不正入力でもJSON.stringifyできる', () => {
+  const nanResult = analyzePosition({ schemaVersion:NaN, handTileIds:['t01'] });
+  const infinityResult = analyzePosition({ schemaVersion:Infinity, handTileIds:['t01'] });
+  assert.equal(nanResult.ok, false);
+  assert.equal(infinityResult.ok, false);
+  assert.equal(nanResult.errors[0].value, 'NaN');
+  assert.equal(infinityResult.errors[0].value, 'Infinity');
+  assertJsonRoundTrips(nanResult);
+  assertJsonRoundTrips(infinityResult);
+});
+
+test('JSON安全化した不正入力結果をJSON.stringify / JSON.parseで往復できる', () => {
+  const circular = { z:undefined, a:[1n, Symbol('x'), () => false] };
+  circular.loop = circular;
+  const result = analyzePosition({ schemaVersion:'1.0', handTileIds:['t01'], disabledRoleIds:circular });
+  assertJsonRoundTrips(result);
+});
+
+test('同じJSON非安全な不正入力を2回解析すると同じエラー結果になる', () => {
+  const circular = { z:undefined, a:[1n, Symbol('x'), () => false] };
+  circular.loop = circular;
+  const input = { schemaVersion:'1.0', handTileIds:['t01'], disabledRoleIds:circular };
+  assert.deepEqual(analyzePosition(input), analyzePosition(input));
+});

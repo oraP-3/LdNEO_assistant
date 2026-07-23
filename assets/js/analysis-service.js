@@ -6,8 +6,41 @@ import { analyzeDiscardCandidates } from './position-analyzer.js';
 const SCHEMA_VERSION = '1.0';
 const tileById = new Map(tiles.map(tile => [tile.id, tile]));
 
+function toJsonSafeErrorValue(value, seen = new WeakSet()) {
+  if (value === null) return null;
+  if (value === undefined) return null;
+  const type = typeof value;
+  if (type === 'string' || type === 'boolean') return value;
+  if (type === 'number') return Number.isFinite(value) ? value : String(value);
+  if (type === 'bigint') return `${value.toString()}n`;
+  if (type === 'symbol') return value.description ? `Symbol(${value.description})` : 'Symbol()';
+  if (type === 'function') return '[Function]';
+  if (type !== 'object') return String(value);
+
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    const result = value.map(item => toJsonSafeErrorValue(item, seen));
+    seen.delete(value);
+    return result;
+  }
+
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    seen.delete(value);
+    return String(value);
+  }
+
+  const result = {};
+  for (const key of Object.keys(value).sort()) {
+    result[key] = toJsonSafeErrorValue(value[key], seen);
+  }
+  seen.delete(value);
+  return result;
+}
+
 function error(code, field, value, message) {
-  return { code, field, value:value === undefined ? null : value, message };
+  return { code, field, value:toJsonSafeErrorValue(value), message };
 }
 
 function failure(errors) {
