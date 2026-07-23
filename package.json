@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "worker:dev": "wrangler dev --config worker/wrangler.jsonc",
+    "worker:check": "wrangler deploy --dry-run --outdir .worker-dist --config worker/wrangler.jsonc",
+    "worker:deploy": "wrangler deploy --config worker/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "wrangler": "4.113.0"
   }
 }
