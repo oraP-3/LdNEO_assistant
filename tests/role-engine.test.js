@@ -2,10 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tiles, defaultRoles } from '../assets/js/data.js';
 import { evaluateHand, checkMachi, validateCustomRole } from '../assets/js/role-engine.js';
+import { analyzeDiscardCandidates } from '../assets/js/position-analyzer.js';
 
 const byId = id => tiles.find(tile => tile.id === id);
 const hand = ids => ids.map(byId);
 const context = (extra={}) => ({roles:defaultRoles,disabledRoleIds:new Set(),isOya:true,thoughtTiles:[],tiles,visibleTiles:[],...extra});
+const allBonusDisabled = () => new Set(defaultRoles.filter(role => role.category === 'bonus').map(role => role.id));
 
 function customBonus({id='custom_bonus',name='テスト加点役',score=90000,ids,requiredCount=ids.length}) {
   return {id,name,score,category:'bonus',group:'custom',builtIn:false,enabledByDefault:true,rule:{type:'fixedSet',keyType:'tileId',requiredKeys:ids,requiredCount}};
@@ -138,4 +140,59 @@ test('同じ9枚のカスタム特殊役は重複登録できない',()=>{
   const result=validateCustomRole(duplicate,tiles,[...defaultRoles,existing]);
   assert.equal(result.valid,false);
   assert.equal(result.code,'duplicate_special');
+});
+
+test('1シリーズが加点役なしでも単独でアガれる',()=>{
+  const result=evaluateHand(hand(['t01','t02','t03','t04','t05','t06','t07','t10','t11']),context({disabledRoleIds:allBonusDisabled()}));
+  assert.equal(result.canAgari,true);
+  assert.ok(result.matchedRoles.some(role=>role.id==='base.one_series'));
+});
+
+test('3シリーズは加点役なしではアガれない',()=>{
+  const result=evaluateHand(hand(['t01','t02','t03','t12','t13','t14','t24','t25','t26']),context({disabledRoleIds:allBonusDisabled()}));
+  assert.equal(result.canAgari,false);
+  assert.equal(result.reason,'bonus');
+  assert.ok(result.matchedRoles.some(role=>role.id==='base.three_series'));
+});
+
+test('歩夢を引いたときに2年生役とAiScReamを同時判定できる',()=>{
+  const result=analyzeDiscardCandidates(hand(['t01','t20','t12','t16','t35','t28','t45','t38','t39']),context());
+  const discard=result.candidates.find(candidate=>candidate.discardTile.id==='t01');
+  const ayumu=discard.winningTiles.find(item=>item.tile.id==='t24');
+  assert.ok(ayumu);
+  assert.ok(ayumu.matchedRoles.some(role=>role.id==='bonus.grade.2'));
+  assert.ok(ayumu.matchedRoles.some(role=>role.id==='bonus.unit.aiscream3'));
+});
+
+test('愛を引いたときに2年生役とDiverDivaを同時判定できる',()=>{
+  const result=analyzeDiscardCandidates(hand(['t01','t12','t16','t20','t24','t27','t38','t43','t45']),context());
+  const discard=result.candidates.find(candidate=>candidate.discardTile.id==='t01');
+  const ai=discard.winningTiles.find(item=>item.tile.id==='t28');
+  assert.ok(ai);
+  assert.ok(ai.matchedRoles.some(role=>role.id==='bonus.grade.2'));
+  assert.ok(ai.matchedRoles.some(role=>role.id==='bonus.unit.diverdiva'));
+});
+
+test('最終9牌から外れる牌を学年・誕生月役へ数えない',()=>{
+  const result=analyzeDiscardCandidates(hand(['t01','t12','t16','t20','t24','t25','t27','t38','t39']),context());
+  const discard=result.candidates.find(candidate=>candidate.discardTile.id==='t01');
+  const wien=discard.winningTiles.find(item=>item.tile.id==='t47');
+  assert.ok(wien);
+  assert.equal(wien.finalHand.some(tile=>tile.id==='t01'),false);
+  assert.equal(wien.matchedRoles.some(role=>role.id==='bonus.grade.2'),false);
+});
+
+test('場に見えている待ち牌を純カラとして区別する',()=>{
+  const ids=['t01','t12','t24','t38','t51','t61','t73','t10','t21'];
+  const role=customSpecial({ids});
+  const result=analyzeDiscardCandidates(
+    hand(['t22',...ids.slice(0,8)]),
+    context({roles:[...defaultRoles,role],visibleTiles:hand(['t21'])})
+  );
+  const discard=result.candidates.find(candidate=>candidate.discardTile.id==='t22');
+  const logo=discard.winningTiles.find(item=>item.tile.id==='t21');
+  assert.ok(logo);
+  assert.equal(logo.isJunkara,true);
+  assert.equal(discard.availableWinningTileCount,0);
+  assert.equal(discard.isJunkara,true);
 });

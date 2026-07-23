@@ -123,7 +123,9 @@ export function evaluateHand(hand, context = {}) {
   }
 
   const bonus = matchedBonusRoles(hand, roles, disabledRoleIds, context);
-  const canAgari = standalone.length > 0 || (base.length > 0 && bonus.length > 0);
+  const hasOneSeries = base.some(role => role.id === 'base.one_series');
+  const hasThreeSeries = base.some(role => role.id === 'base.three_series');
+  const canAgari = standalone.length > 0 || hasOneSeries || (hasThreeSeries && bonus.length > 0);
   const matchedRoles = [...standalone, ...base, ...bonus];
   const totalScore = canAgari ? matchedRoles.reduce((sum, role) => sum + role.score, 0) : 0;
 
