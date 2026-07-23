@@ -109,3 +109,85 @@ test('同じ入力を2回解析すると同一結果になる', () => {
   const input = { schemaVersion:'1.0', handTileIds:['t01', ...ayumuBase8], visibleTileIds:['t24'] };
   assert.deepEqual(analyzePosition(input), analyzePosition(input));
 });
+
+test('IDのないカスタム役を渡すとINVALID_CUSTOM_ROLE_IDになる', () => {
+  const role = customBonus(['t01','t02','t03']);
+  delete role.id;
+  const result = analyzePosition({ schemaVersion:'1.0', handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'], customRoles:[role] });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors[0], {
+    code:'INVALID_CUSTOM_ROLE_ID',
+    field:'customRoles',
+    value:null,
+    message:'Custom roles require an explicit ID beginning with custom_.'
+  });
+});
+
+test('custom_で始まらないIDを渡すとINVALID_CUSTOM_ROLE_IDになる', () => {
+  const role = { ...customBonus(['t01','t02','t03']), id:'bonus_json' };
+  const result = analyzePosition({ schemaVersion:'1.0', handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'], customRoles:[role] });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors[0], {
+    code:'INVALID_CUSTOM_ROLE_ID',
+    field:'customRoles',
+    value:'bonus_json',
+    message:'Custom roles require an explicit ID beginning with custom_.'
+  });
+});
+
+test('不正IDの入力を2回解析しても完全に同じエラー結果になる', () => {
+  const input = {
+    schemaVersion:'1.0',
+    handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'],
+    customRoles:[{ ...customBonus(['t01','t02','t03']), id:'invalid_json' }]
+  };
+  assert.deepEqual(analyzePosition(input), analyzePosition(input));
+});
+
+test('有効なカスタム役を含む同じ入力を2回解析すると完全に同じ結果になる', () => {
+  const input = {
+    schemaVersion:'1.0',
+    handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'],
+    customRoles:[customBonus(['t03','t01','t02'])]
+  };
+  assert.deepEqual(analyzePosition(input), analyzePosition(input));
+});
+
+test('normalizedInput.customRolesに正規化済みruleが含まれる', () => {
+  const specialIds = ['t21','t10','t73','t61','t51','t38','t24','t12','t01'];
+  const result = analyzePosition({
+    schemaVersion:'1.0',
+    handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'],
+    customRoles:[customBonus(['t03','t01','t02']), customSpecial(specialIds)]
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.input.customRoles.find(role => role.id === 'custom_bonus_json').rule, {
+    type:'fixedSet',
+    keyType:'tileId',
+    requiredKeys:['t01','t02','t03'],
+    requiredCount:3
+  });
+  assert.deepEqual(result.input.customRoles.find(role => role.id === 'custom_special_json').rule, {
+    type:'exactHand',
+    requiredTileIds:['t01','t10','t12','t21','t24','t38','t51','t61','t73']
+  });
+});
+
+test('normalizedInputを利用して再度analyzePosition()を呼び、同じ解析結果を得られる', () => {
+  const input = {
+    schemaVersion:'1.0',
+    handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'],
+    customRoles:[customBonus(['t03','t01','t02'])]
+  };
+  const result = analyzePosition(input);
+  assert.deepEqual(analyzePosition(result.input), result);
+});
+
+test('カスタム役を含む結果もJSON.stringify / JSON.parseを往復できる', () => {
+  const result = analyzePosition({
+    schemaVersion:'1.0',
+    handTileIds:['t01','t02','t03','t12','t13','t14','t24','t25','t26'],
+    customRoles:[customBonus(['t03','t01','t02'])]
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), result);
+});

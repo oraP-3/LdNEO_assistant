@@ -48,6 +48,28 @@ function stableRoles(roles) {
   return [...roles].map(stableRole).sort(roleSort);
 }
 
+function stableCustomRole(role) {
+  const base = stableRole(role);
+  if (role.category === 'standalone') {
+    return {
+      ...base,
+      rule:{
+        type:'exactHand',
+        requiredTileIds:[...(role.rule?.requiredTileIds || [])].sort(tileSort)
+      }
+    };
+  }
+  return {
+    ...base,
+    rule:{
+      type:'fixedSet',
+      keyType:'tileId',
+      requiredKeys:[...(role.rule?.requiredKeys || [])].sort(tileSort),
+      requiredCount:role.rule?.requiredCount
+    }
+  };
+}
+
 function stableSeriesComposition(composition) {
   return Object.fromEntries(Object.entries(composition).sort(([a], [b]) => a.localeCompare(b)));
 }
@@ -91,6 +113,15 @@ function validateCustomRoles(value, errors) {
   for (const candidate of value) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
       errors.push(error('INVALID_CUSTOM_ROLE', 'customRoles', candidate, 'customRoles contains a non-object role.'));
+      continue;
+    }
+    if (typeof candidate.id !== 'string' || candidate.id.length === 0 || !candidate.id.startsWith('custom_')) {
+      errors.push(error(
+        'INVALID_CUSTOM_ROLE_ID',
+        'customRoles',
+        candidate.id ?? null,
+        'Custom roles require an explicit ID beginning with custom_.'
+      ));
       continue;
     }
     const normalized = normalizeCustomRole(candidate);
@@ -145,7 +176,7 @@ function normalizeInput(input) {
       visibleTileIds:[...visibleTileIds].sort(tileSort),
       thoughtTileIds:[...thoughtTileIds].sort(tileSort),
       disabledRoleIds:[...new Set(disabledRoleIds)].sort(),
-      customRoles:customRoles.map(stableRole),
+      customRoles:customRoles.map(stableCustomRole),
       isOya:input.isOya === true
     },
     customRoles
