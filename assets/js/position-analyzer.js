@@ -51,14 +51,12 @@ export function analyzeDiscardCandidates(hand9Tiles, context = {}) {
       };
     });
 
-    if (winningTiles.length === 0) return;
-
     candidates.push({
       discardTile,
       seriesComposition:summarizeSeries(handAfterDiscard),
       winningTiles,
       availableWinningTileCount:winningTiles.filter(item => !item.isJunkara).length,
-      isJunkara:winningTiles.every(item => item.isJunkara)
+      isJunkara:winningTiles.length > 0 && winningTiles.every(item => item.isJunkara)
     });
   });
 

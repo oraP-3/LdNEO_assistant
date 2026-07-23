@@ -8,6 +8,7 @@ const byId = id => tiles.find(tile => tile.id === id);
 const hand = ids => ids.map(byId);
 const context = (extra={}) => ({roles:defaultRoles,disabledRoleIds:new Set(),isOya:true,thoughtTiles:[],tiles,visibleTiles:[],...extra});
 const allBonusDisabled = () => new Set(defaultRoles.filter(role => role.category === 'bonus').map(role => role.id));
+const allRolesDisabled = () => new Set(defaultRoles.map(role => role.id));
 
 function customBonus({id='custom_bonus',name='テスト加点役',score=90000,ids,requiredCount=ids.length}) {
   return {id,name,score,category:'bonus',group:'custom',builtIn:false,enabledByDefault:true,rule:{type:'fixedSet',keyType:'tileId',requiredKeys:ids,requiredCount}};
@@ -195,4 +196,17 @@ test('場に見えている待ち牌を純カラとして区別する',()=>{
   assert.equal(logo.isJunkara,true);
   assert.equal(discard.availableWinningTileCount,0);
   assert.equal(discard.isJunkara,true);
+});
+
+test('直接アガリにならない9牌でも9件の空待ち候補を返す',()=>{
+  const result=analyzeDiscardCandidates(
+    hand(['t01','t02','t03','t12','t13','t14','t24','t25','t26']),
+    context({disabledRoleIds:allRolesDisabled()})
+  );
+  assert.equal(result.candidates.length,9);
+  for (const candidate of result.candidates) {
+    assert.deepEqual(candidate.winningTiles,[]);
+    assert.equal(candidate.availableWinningTileCount,0);
+    assert.equal(candidate.isJunkara,false);
+  }
 });
