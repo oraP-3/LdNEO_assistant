@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleRequest } from '../worker/src/index.js';
+import { openApiDocument } from '../worker/src/openapi.js';
 
 const API_KEY = 'test-secret-key';
 const ORIGIN = 'https://example.github.io';
@@ -192,6 +193,35 @@ test('OpenAPIのSeriesCompositionとDiscardCandidate参照が実レスポンス�
   assert.deepEqual(schemas.DiscardCandidate.properties.seriesComposition, { $ref:'#/components/schemas/SeriesComposition' });
   assert.equal(schemas.SeriesCompositionEntry.type, 'object');
   assert.deepEqual(schemas.SeriesCompositionEntry.required, ['total', 'characters']);
+});
+
+
+test('ChatGPT Actions互換のためtype objectスキーマはproperties objectを持つ', () => {
+  const doc = openApiDocument();
+  const schemas = doc.components.schemas;
+  const failures = [];
+
+  const visit = (node, path) => {
+    if (!node || typeof node !== 'object' || Array.isArray(node)) return;
+    if (node.type === 'object') {
+      if (!Object.hasOwn(node, 'properties')) {
+        failures.push(`${path}: properties missing`);
+      } else if (!node.properties || typeof node.properties !== 'object' || Array.isArray(node.properties)) {
+        failures.push(`${path}: properties is not object`);
+      }
+    }
+    for (const [key, value] of Object.entries(node)) {
+      visit(value, `${path}.${key}`);
+    }
+  };
+
+  visit(schemas, 'components.schemas');
+
+  assert.deepEqual(failures, []);
+  assert.deepEqual(schemas.AnalysisInput.properties.customRoles.items.properties, {});
+  assert.deepEqual(schemas.AnalysisRequest.properties.customRoles.items.properties, {});
+  assert.deepEqual(schemas.SeriesComposition.properties, {});
+  assert.deepEqual(schemas.SeriesComposition.additionalProperties, { $ref:'#/components/schemas/SeriesCompositionEntry' });
 });
 
 test('AnalysisResponse.oneOfにErrorResponseを含まず、エラーステータスはErrorResponseを参照する', async () => {
