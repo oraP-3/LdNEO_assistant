@@ -14,6 +14,8 @@ Cloudflare Workers で既存の `analyzePosition()` を HTTP API として公開
 npm install
 ```
 
+初回セットアップ時には必ず `npm install` を実行してください。`npm install` により、Wrangler 本体と推移的依存関係を含む正しい `package-lock.json` が生成されます。
+
 Wrangler へログインします。
 
 ```sh
@@ -40,6 +42,8 @@ npm run worker:dev
 npm run worker:check
 ```
 
+現在の Codex 環境では npm registry へのアクセスが `E403 Forbidden` で拒否されたため、Wrangler の dry-run は未実施です。dry-run 成功前に本番デプロイしないでください。
+
 ## 本番 Secret 登録
 
 ```sh
@@ -48,6 +52,17 @@ npx wrangler secret put ANALYSIS_API_KEY \
 ```
 
 API キーや `.dev.vars` / `.env` は Git へコミットしないでください。
+
+## 本番デプロイ前の必須確認
+
+本番デプロイ前に必ず以下を実行し、どちらも成功することを確認してください。
+
+```sh
+npm test
+npm run worker:check
+```
+
+`npm run worker:check` の dry-run が成功するまでは、本番デプロイを行わないでください。
 
 ## 本番デプロイ
 
