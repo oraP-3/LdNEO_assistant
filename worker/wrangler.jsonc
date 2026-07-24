@@ -1,0 +1,9 @@
+{
+  "name": "ldneo-analysis-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-23",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": ""
+  }
+}
