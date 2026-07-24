@@ -98,3 +98,46 @@ curl -i https://<your-worker-url>/analyze-position \
 ```
 
 許可された Origin だけに `Access-Control-Allow-Origin` を返します。ワイルドカード Origin は使用しません。Origin ヘッダーがないサーバー間通信は許可されます。
+
+## ChatGPT Actions 向けエンドポイント
+
+この Worker は ChatGPT Actions から既存の局面解析 API を安全に呼び出すため、牌・役参照 API と OpenAPI 仕様を提供します。この段階では GPT Store へ公開せず、本番デプロイや Cloudflare Secret の変更も行いません。
+
+### OpenAPI 仕様
+
+- URL: https://ldneo-analysis-api.ldneo-tools.workers.dev/openapi.json
+- エンドポイント: `GET /openapi.json`
+- 認証: 不要
+- 用途: ChatGPT Actions へインポート可能な OpenAPI 3.1.0 JSON を返します。
+
+OpenAPI スキーマや Git リポジトリへ API キーを書かないでください。ChatGPT Actions 側では認証方式を `API Key` / `Bearer` として設定し、実際のキーは `Authorization: Bearer <API key>` ヘッダーでだけ送信します。
+
+公開共有する場合は、別途プライバシーポリシー URL が必要です。
+
+### 牌名解決
+
+`POST /resolve-tiles` は Bearer API key 認証が必須です。ユーザーが入力した牌名、牌 ID、キャラクター ID、シリーズ名、ユニット名を既存牌データに照合し、解析 API へ渡す正しい牌 ID 候補を返します。
+
+```sh
+curl -i https://ldneo-analysis-api.ldneo-tools.workers.dev/resolve-tiles \
+  -H 'Authorization: Bearer <ANALYSIS_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  --data '{"schemaVersion":"1.0","queries":["上原歩夢","宮下 愛","t38"]}'
+```
+
+ChatGPT Actions では、牌名から ID を推測せず、先にこのエンドポイントで候補を解決してください。候補が複数ある場合は、解析前にユーザーへ確認してください。
+
+### 役一覧
+
+`GET /roles` は Bearer API key 認証が必須です。既定役だけを id 昇順で返し、カスタム役や localStorage にはアクセスしません。
+
+```sh
+curl -i https://ldneo-analysis-api.ldneo-tools.workers.dev/roles \
+  -H 'Authorization: Bearer <ANALYSIS_API_KEY>'
+```
+
+ChatGPT Actions では、`disabledRoleIds` を指定する必要がある場合に参照します。通常の全役有効設定では呼び出し必須ではありません。
+
+### 局面解析
+
+`POST /analyze-position` は Bearer API key 認証が必須です。ChatGPT Actions から牌名入力を扱う場合は、先に `/resolve-tiles` で牌 ID へ変換してから呼び出してください。

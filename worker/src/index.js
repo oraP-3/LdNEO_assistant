@@ -1,4 +1,6 @@
 import { analyzePosition } from '../../assets/js/analysis-service.js';
+import { listRoles, resolveTiles } from './catalog-service.js';
+import { openApiDocument } from './openapi.js';
 
 const SERVICE_VERSION = '1.0';
 const SCHEMA_VERSION = '1.0';
@@ -15,6 +17,7 @@ function errorBody(code, field, value, message) {
 }
 
 function jsonResponse(body, status = 200, request = null, env = {}, extraHeaders = {}) {
+  if (request && isCorsForbidden(request, env)) return corsForbidden(request, env);
   const headers = new Headers(JSON_HEADERS);
   for (const [key, value] of Object.entries(extraHeaders)) headers.set(key, value);
   applyCors(headers, request, env);
@@ -36,6 +39,23 @@ function appendVary(current, value) {
 
 function allowedOrigins(env = {}) {
   return String(env.ALLOWED_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean);
+}
+
+function isCorsForbidden(request, env) {
+  const origin = request.headers.get('Origin');
+  return Boolean(origin && !allowedOrigins(env).includes(origin));
+}
+
+function corsForbidden(request, env, methods = null) {
+  const extra = methods ? { 'Access-Control-Allow-Methods':methods, 'Access-Control-Allow-Headers':'Authorization, Content-Type' } : {};
+  return jsonResponseRaw(errorBody('CORS_FORBIDDEN', 'Origin', request.headers.get('Origin') || null, 'Origin is not allowed.'), 403, request, env, extra);
+}
+
+function jsonResponseRaw(body, status = 200, request = null, env = {}, extraHeaders = {}) {
+  const headers = new Headers(JSON_HEADERS);
+  for (const [key, value] of Object.entries(extraHeaders)) headers.set(key, value);
+  applyCors(headers, request, env);
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function methodNotAllowed(allow, request, env) {
@@ -92,18 +112,18 @@ async function parseJsonBody(request) {
   }
 }
 
-function preflight(request, env) {
+function preflight(request, env, methods = 'POST, OPTIONS') {
   const origin = request.headers.get('Origin');
   const headers = new Headers(JSON_HEADERS);
   headers.set('Vary', 'Origin');
-  headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  headers.set('Access-Control-Allow-Methods', methods);
   headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   if (origin && allowedOrigins(env).includes(origin)) {
     headers.set('Access-Control-Allow-Origin', origin);
     return new Response(null, { status:204, headers });
   }
-  return jsonResponse(errorBody('CORS_FORBIDDEN', 'Origin', origin || null, 'Origin is not allowed.'), 403, request, env, {
-    'Access-Control-Allow-Methods':'POST, OPTIONS',
+  return jsonResponseRaw(errorBody('CORS_FORBIDDEN', 'Origin', origin || null, 'Origin is not allowed.'), 403, request, env, {
+    'Access-Control-Allow-Methods':methods,
     'Access-Control-Allow-Headers':'Authorization, Content-Type'
   });
 }
@@ -113,6 +133,27 @@ export async function handleRequest(request, env = {}, ctx = {}) {
   if (url.pathname === '/health') {
     if (request.method !== 'GET') return methodNotAllowed('GET', request, env);
     return jsonResponse({ ok:true, service:'ldneo-analysis-api', serviceVersion:SERVICE_VERSION, analysisSchemaVersion:SCHEMA_VERSION }, 200, request, env);
+  }
+  if (url.pathname === '/openapi.json') {
+    if (request.method !== 'GET') return methodNotAllowed('GET', request, env);
+    return jsonResponse(openApiDocument(), 200, request, env, { 'Cache-Control':'public, max-age=300' });
+  }
+  if (url.pathname === '/resolve-tiles') {
+    if (request.method === 'OPTIONS') return preflight(request, env, 'POST, OPTIONS');
+    if (request.method !== 'POST') return methodNotAllowed('POST, OPTIONS', request, env);
+    const auth = await authenticate(request, env);
+    if (auth.response) return auth.response;
+    const parsed = await parseJsonBody(request);
+    if (parsed.response) return jsonResponse(await parsed.response.json(), parsed.response.status, request, env, Object.fromEntries(parsed.response.headers));
+    const result = resolveTiles(parsed.body);
+    return jsonResponse(result, result.ok ? 200 : 400, request, env);
+  }
+  if (url.pathname === '/roles') {
+    if (request.method === 'OPTIONS') return preflight(request, env, 'GET, OPTIONS');
+    if (request.method !== 'GET') return methodNotAllowed('GET, OPTIONS', request, env);
+    const auth = await authenticate(request, env);
+    if (auth.response) return auth.response;
+    return jsonResponse(listRoles(), 200, request, env);
   }
   if (url.pathname === '/analyze-position') {
     if (request.method === 'OPTIONS') return preflight(request, env);
