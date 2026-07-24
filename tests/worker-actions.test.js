@@ -126,8 +126,7 @@ test('AnalysisResponseに8牌と9牌の実レスポンス項目を定義し、�
   const schemas = doc.components.schemas;
   assert.deepEqual(schemas.AnalysisResponse.oneOf, [
     { $ref:'#/components/schemas/AnalysisWaitsResponse' },
-    { $ref:'#/components/schemas/AnalysisDiscardResponse' },
-    { $ref:'#/components/schemas/ErrorResponse' }
+    { $ref:'#/components/schemas/AnalysisDiscardResponse' }
   ]);
   assert.ok(schemas.AnalysisWaitsResponse.properties.input);
   assert.ok(schemas.AnalysisWaitsResponse.properties.waits);
@@ -170,4 +169,40 @@ test('schemaVersionはOpenAPI上でconst 1.0', async () => {
   const doc = await body(await handleRequest(req('/openapi.json')));
   assert.deepEqual(doc.components.schemas.ResolveTilesRequest.properties.schemaVersion, { const:'1.0' });
   assert.deepEqual(doc.components.schemas.AnalysisRequest.properties.schemaVersion, { const:'1.0' });
+});
+
+test('9牌の実レスポンスのseriesCompositionはobjectで各値にtotalとcharactersがある', async () => {
+  const response = await handleRequest(req('/analyze-position', { method:'POST', headers:jsonHeaders, body:JSON.stringify(valid9) }), env);
+  const json = await body(response);
+  const composition = json.discardCandidates[0].seriesComposition;
+  assert.equal(Array.isArray(composition), false);
+  assert.equal(typeof composition, 'object');
+  assert.notEqual(composition, null);
+  for (const entry of Object.values(composition)) {
+    assert.equal(Number.isInteger(entry.total), true);
+    assert.equal(Number.isInteger(entry.characters), true);
+  }
+});
+
+test('OpenAPIのSeriesCompositionとDiscardCandidate参照が実レスポンスに合っている', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const schemas = doc.components.schemas;
+  assert.equal(schemas.SeriesComposition.type, 'object');
+  assert.deepEqual(schemas.SeriesComposition.additionalProperties, { $ref:'#/components/schemas/SeriesCompositionEntry' });
+  assert.deepEqual(schemas.DiscardCandidate.properties.seriesComposition, { $ref:'#/components/schemas/SeriesComposition' });
+  assert.equal(schemas.SeriesCompositionEntry.type, 'object');
+  assert.deepEqual(schemas.SeriesCompositionEntry.required, ['total', 'characters']);
+});
+
+test('AnalysisResponse.oneOfにErrorResponseを含まず、エラーステータスはErrorResponseを参照する', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const oneOfRefs = doc.components.schemas.AnalysisResponse.oneOf.map(item => item.$ref);
+  assert.deepEqual(oneOfRefs, [
+    '#/components/schemas/AnalysisWaitsResponse',
+    '#/components/schemas/AnalysisDiscardResponse'
+  ]);
+  assert.equal(oneOfRefs.includes('#/components/schemas/ErrorResponse'), false);
+  for (const status of ['400', '401', '413', '415', '500', '503']) {
+    assert.deepEqual(doc.paths['/analyze-position'].post.responses[status].content['application/json'].schema, { $ref:'#/components/schemas/ErrorResponse' });
+  }
 });
