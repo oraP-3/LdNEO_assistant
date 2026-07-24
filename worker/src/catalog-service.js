@@ -24,11 +24,12 @@ function publicTile(tile, matchType) {
 }
 
 function rankTile(tile, query, normalizedQuery) {
-  if (tile.id === query) return { rank:1, matchType:'exactId' };
+  const normalizedId = normalizeTileQuery(tile.id);
+  if (normalizedId === normalizedQuery) return { rank:1, matchType:'exactId' };
   const normalizedName = normalizeTileQuery(tile.name);
   const normalizedCharacterId = tile.characterId == null ? '' : normalizeTileQuery(tile.characterId);
   if (normalizedName === normalizedQuery) return { rank:2, matchType:'exactName' };
-  if (tile.characterId === query) return { rank:3, matchType:'exactCharacterId' };
+  if (normalizedCharacterId === normalizedQuery) return { rank:3, matchType:'exactCharacterId' };
   if (normalizedName.startsWith(normalizedQuery)) return { rank:4, matchType:'prefixName' };
   if (normalizedName.includes(normalizedQuery)) return { rank:5, matchType:'partialName' };
   const searchable = [tile.characterId, tile.unit, tile.series].filter(value => value != null).map(normalizeTileQuery);
@@ -38,6 +39,7 @@ function rankTile(tile, query, normalizedQuery) {
 
 export function validateResolveTilesRequest(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { code:'INVALID_REQUEST', field:'body', value:null, message:'Request body must be an object.' };
+  if (input.schemaVersion !== SCHEMA_VERSION) return { code:'UNSUPPORTED_SCHEMA_VERSION', field:'schemaVersion', value:input.schemaVersion ?? null, message:'Only schemaVersion 1.0 is supported.' };
   if (!Array.isArray(input.queries)) return { code:'INVALID_QUERIES', field:'queries', value:null, message:'queries must be an array.' };
   if (input.queries.length < 1 || input.queries.length > MAX_QUERIES) return { code:'INVALID_QUERIES', field:'queries', value:input.queries.length, message:'queries must contain between 1 and 20 items.' };
   for (let i = 0; i < input.queries.length; i += 1) {

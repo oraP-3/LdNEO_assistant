@@ -8,6 +8,7 @@ const env = { ANALYSIS_API_KEY:API_KEY, ALLOWED_ORIGINS:ORIGIN };
 const auth = { Authorization:`Bearer ${API_KEY}` };
 const jsonHeaders = { ...auth, 'Content-Type':'application/json' };
 const valid8 = { schemaVersion:'1.0', handTileIds:['t20','t12','t16','t35','t28','t45','t38','t39'] };
+const valid9 = { schemaVersion:'1.0', handTileIds:['t01', ...valid8.handTileIds] };
 
 const req = (path, options = {}) => new Request(`https://api.example.test${path}`, options);
 const body = response => response.json();
@@ -55,7 +56,8 @@ test('GET /openapi.jsonが認証不要で有効なJSON', async () => {
   assert.match(response.headers.get('Content-Type'), /^application\/json; charset=utf-8/);
   assert.equal(response.headers.get('Cache-Control'), 'public, max-age=300');
   assert.equal(response.headers.get('X-Content-Type-Options'), 'nosniff');
-  assert.doesNotThrow(async () => JSON.parse(await response.clone().text()));
+  const text = await response.clone().text();
+  assert.doesNotThrow(() => JSON.parse(text));
 });
 
 test('openapiが3.1.0でservers URLとoperationIdとbearerAuthを含む', async () => {
@@ -117,4 +119,55 @@ test('既存/analyze-positionの挙動が変わっていない', async () => {
   assert.equal(response.status, 200);
   assert.equal(json.ok, true);
   assert.ok(Array.isArray(json.waits.groups));
+});
+
+test('AnalysisResponseに8牌と9牌の実レスポンス項目を定義し、存在しないルート項目は定義しない', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const schemas = doc.components.schemas;
+  assert.deepEqual(schemas.AnalysisResponse.oneOf, [
+    { $ref:'#/components/schemas/AnalysisWaitsResponse' },
+    { $ref:'#/components/schemas/AnalysisDiscardResponse' },
+    { $ref:'#/components/schemas/ErrorResponse' }
+  ]);
+  assert.ok(schemas.AnalysisWaitsResponse.properties.input);
+  assert.ok(schemas.AnalysisWaitsResponse.properties.waits);
+  assert.ok(schemas.AnalysisDiscardResponse.properties.input);
+  assert.ok(schemas.AnalysisDiscardResponse.properties.currentHand);
+  assert.ok(schemas.AnalysisDiscardResponse.properties.discardCandidates);
+  const serialized = JSON.stringify(schemas.AnalysisResponse);
+  assert.equal(serialized.includes('normalizedInput'), false);
+  assert.equal(serialized.includes('currentWin'), false);
+  assert.equal(Object.hasOwn(schemas.AnalysisWaitsResponse.properties, 'winningTiles'), false);
+  assert.equal(Object.hasOwn(schemas.AnalysisDiscardResponse.properties, 'winningTiles'), false);
+});
+
+test('8牌の実レスポンスとOpenAPIで定義した項目名が一致する', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const response = await handleRequest(req('/analyze-position', { method:'POST', headers:jsonHeaders, body:JSON.stringify(valid8) }), env);
+  const actualKeys = Object.keys(await body(response)).sort();
+  const schemaKeys = doc.components.schemas.AnalysisWaitsResponse.required.toSorted();
+  assert.deepEqual(actualKeys, schemaKeys);
+});
+
+test('9牌の実レスポンスとOpenAPIで定義した項目名が一致する', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const response = await handleRequest(req('/analyze-position', { method:'POST', headers:jsonHeaders, body:JSON.stringify(valid9) }), env);
+  const actualKeys = Object.keys(await body(response)).sort();
+  const schemaKeys = doc.components.schemas.AnalysisDiscardResponse.required.toSorted();
+  assert.deepEqual(actualKeys, schemaKeys);
+});
+
+test('TileMatchがallOfによるadditionalProperties矛盾を持たない', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  const tileMatch = doc.components.schemas.TileMatch;
+  assert.equal(Object.hasOwn(tileMatch, 'allOf'), false);
+  assert.equal(tileMatch.type, 'object');
+  assert.equal(tileMatch.additionalProperties, false);
+  assert.ok(tileMatch.properties.matchType);
+});
+
+test('schemaVersionはOpenAPI上でconst 1.0', async () => {
+  const doc = await body(await handleRequest(req('/openapi.json')));
+  assert.deepEqual(doc.components.schemas.ResolveTilesRequest.properties.schemaVersion, { const:'1.0' });
+  assert.deepEqual(doc.components.schemas.AnalysisRequest.properties.schemaVersion, { const:'1.0' });
 });

@@ -70,3 +70,37 @@ test('rolesはid昇順でundefinedを含まない', () => {
   assert.deepEqual(body.roles.map(role => role.id), [...body.roles.map(role => role.id)].sort());
   assert.equal(JSON.stringify(body).includes('undefined'), false);
 });
+
+test('"T24"でt24がexactId', () => {
+  const match = first('T24');
+  assert.equal(match.id, 't24');
+  assert.equal(match.matchType, 'exactId');
+});
+
+test('"NIJI_AYUMU"でt24がexactCharacterId', () => {
+  const match = first('NIJI_AYUMU');
+  assert.equal(match.id, 't24');
+  assert.equal(match.matchType, 'exactCharacterId');
+});
+
+test('schemaVersion未指定がエラー', () => {
+  const result = resolveTiles({ queries:['t24'] });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors[0], {
+    code:'UNSUPPORTED_SCHEMA_VERSION',
+    field:'schemaVersion',
+    value:null,
+    message:'Only schemaVersion 1.0 is supported.'
+  });
+});
+
+test('schemaVersion不正がエラー', () => {
+  const result = resolveTiles({ schemaVersion:'2.0', queries:['t24'] });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors[0], {
+    code:'UNSUPPORTED_SCHEMA_VERSION',
+    field:'schemaVersion',
+    value:'2.0',
+    message:'Only schemaVersion 1.0 is supported.'
+  });
+});

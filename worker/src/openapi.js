@@ -9,6 +9,27 @@ const errorResponses = {
   503:{ description:'Service unavailable', content:{ 'application/json':{ schema:{ $ref:'#/components/schemas/ErrorResponse' } } } }
 };
 
+const schemaVersion = { const:'1.0' };
+const stringIdArray = { type:'array', uniqueItems:true, items:{ type:'string' } };
+const roleResult = {
+  type:'object',
+  required:['id','name','score','category','group'],
+  properties:{ id:{ type:'string' }, name:{ type:'string' }, score:{ type:'integer' }, category:{ type:'string' }, group:{ type:'string' } },
+  additionalProperties:true
+};
+const analysisTile = {
+  type:'object',
+  required:['id','name','series','type','grade','birthMonth','hasSpecial'],
+  properties:{ id:{ type:'string' }, name:{ type:'string' }, series:{ type:'string' }, type:{ type:'string' }, grade:{ type:['integer','null'] }, birthMonth:{ type:['integer','null'] }, hasSpecial:{ type:'boolean' } },
+  additionalProperties:false
+};
+const normalizedInput = {
+  type:'object',
+  required:['schemaVersion','handTileIds','visibleTileIds','thoughtTileIds','disabledRoleIds','customRoles','isOya'],
+  properties:{ schemaVersion, handTileIds:stringIdArray, visibleTileIds:stringIdArray, thoughtTileIds:stringIdArray, disabledRoleIds:stringIdArray, customRoles:{ type:'array', items:{ type:'object', additionalProperties:true } }, isOya:{ type:'boolean' } },
+  additionalProperties:false
+};
+
 export function openApiDocument() {
   return {
     openapi:'3.1.0',
@@ -50,15 +71,27 @@ export function openApiDocument() {
       securitySchemes:{ bearerAuth:{ type:'http', scheme:'bearer' } },
       schemas:{
         ErrorItem:{ type:'object', required:['code','field','value','message'], properties:{ code:{ type:'string' }, field:{ type:['string','null'] }, value:{}, message:{ type:'string' } }, additionalProperties:false },
-        ErrorResponse:{ type:'object', required:['schemaVersion','ok','errors'], properties:{ schemaVersion:{ type:'string' }, ok:{ const:false }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:true },
-        Tile:{ type:'object', required:['id','name','series','type','characterId','grade','unit','birthMonth','hasSpecial'], properties:{ id:{ type:'string' }, name:{ type:'string' }, series:{ type:'string' }, type:{ type:'string' }, characterId:{ type:['string','null'] }, grade:{ type:['integer','null'] }, unit:{ type:['string','null'] }, birthMonth:{ type:['integer','null'] }, hasSpecial:{ type:'boolean' } }, additionalProperties:false },
-        TileMatch:{ allOf:[{ $ref:'#/components/schemas/Tile' }, { type:'object', required:['matchType'], properties:{ matchType:{ enum:['exactId','exactName','exactCharacterId','prefixName','partialName','partialMetadata'] } } }] },
-        ResolveTilesRequest:{ type:'object', required:['schemaVersion','queries'], properties:{ schemaVersion:{ type:'string' }, queries:{ type:'array', minItems:1, maxItems:20, items:{ type:'string', minLength:1, maxLength:100 } } }, additionalProperties:false },
-        ResolveTilesResponse:{ type:'object', required:['schemaVersion','ok','results','errors'], properties:{ schemaVersion:{ type:'string' }, ok:{ type:'boolean' }, results:{ type:'array', items:{ type:'object', required:['query','normalizedQuery','matches'], properties:{ query:{ type:'string' }, normalizedQuery:{ type:'string' }, matches:{ type:'array', maxItems:10, items:{ $ref:'#/components/schemas/TileMatch' } } }, additionalProperties:false } }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
+        ErrorResponse:{ type:'object', required:['schemaVersion','ok','errors'], properties:{ schemaVersion, ok:{ const:false }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:true },
+        CatalogTile:{ type:'object', required:['id','name','series','type','characterId','grade','unit','birthMonth','hasSpecial'], properties:{ id:{ type:'string' }, name:{ type:'string' }, series:{ type:'string' }, type:{ type:'string' }, characterId:{ type:['string','null'] }, grade:{ type:['integer','null'] }, unit:{ type:['string','null'] }, birthMonth:{ type:['integer','null'] }, hasSpecial:{ type:'boolean' } }, additionalProperties:false },
+        Tile:{ $ref:'#/components/schemas/CatalogTile' },
+        TileMatch:{ type:'object', required:['id','name','series','type','characterId','grade','unit','birthMonth','hasSpecial','matchType'], properties:{ id:{ type:'string' }, name:{ type:'string' }, series:{ type:'string' }, type:{ type:'string' }, characterId:{ type:['string','null'] }, grade:{ type:['integer','null'] }, unit:{ type:['string','null'] }, birthMonth:{ type:['integer','null'] }, hasSpecial:{ type:'boolean' }, matchType:{ enum:['exactId','exactName','exactCharacterId','prefixName','partialName','partialMetadata'] } }, additionalProperties:false },
+        ResolveTilesRequest:{ type:'object', required:['schemaVersion','queries'], properties:{ schemaVersion, queries:{ type:'array', minItems:1, maxItems:20, items:{ type:'string', minLength:1, maxLength:100 } } }, additionalProperties:false },
+        ResolveTilesResponse:{ type:'object', required:['schemaVersion','ok','results','errors'], properties:{ schemaVersion, ok:{ type:'boolean' }, results:{ type:'array', items:{ type:'object', required:['query','normalizedQuery','matches'], properties:{ query:{ type:'string' }, normalizedQuery:{ type:'string' }, matches:{ type:'array', maxItems:10, items:{ $ref:'#/components/schemas/TileMatch' } } }, additionalProperties:false } }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
         RoleSummary:{ type:'object', required:['id','name','score','category','group','enabledByDefault','ruleType'], properties:{ id:{ type:'string' }, name:{ type:'string' }, score:{ type:'integer' }, category:{ type:'string' }, group:{ type:'string' }, enabledByDefault:{ type:'boolean' }, ruleType:{ type:['string','null'] } }, additionalProperties:false },
-        RolesResponse:{ type:'object', required:['schemaVersion','ok','roles','errors'], properties:{ schemaVersion:{ type:'string' }, ok:{ const:true }, roles:{ type:'array', items:{ $ref:'#/components/schemas/RoleSummary' } }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
-        AnalysisRequest:{ type:'object', required:['schemaVersion','handTileIds'], properties:{ schemaVersion:{ type:'string' }, handTileIds:{ type:'array', minItems:8, maxItems:9, uniqueItems:true, description:'8または9枚のみ有効です。', items:{ type:'string' } }, visibleTileIds:{ type:'array', uniqueItems:true, items:{ type:'string' } }, thoughtTileIds:{ type:'array', uniqueItems:true, items:{ type:'string' } }, disabledRoleIds:{ type:'array', uniqueItems:true, items:{ type:'string' } }, customRoles:{ type:'array', items:{ type:'object', additionalProperties:true } }, isOya:{ type:'boolean' } }, additionalProperties:false },
-        AnalysisResponse:{ type:'object', required:['schemaVersion','ok','errors'], properties:{ schemaVersion:{ type:'string' }, ok:{ type:'boolean' }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } }, normalizedInput:{ type:'object', additionalProperties:true }, winningTiles:{ type:'array', items:{ type:'object', additionalProperties:true } }, discardCandidates:{ type:'array', items:{ type:'object', additionalProperties:true } }, currentWin:{ type:['object','null'], additionalProperties:true } }, additionalProperties:true }
+        RolesResponse:{ type:'object', required:['schemaVersion','ok','roles','errors'], properties:{ schemaVersion, ok:{ const:true }, roles:{ type:'array', items:{ $ref:'#/components/schemas/RoleSummary' } }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
+        AnalysisRequest:{ type:'object', required:['schemaVersion','handTileIds'], properties:{ schemaVersion, handTileIds:{ type:'array', minItems:8, maxItems:9, uniqueItems:true, description:'8または9枚のみ有効です。', items:{ type:'string' } }, visibleTileIds:stringIdArray, thoughtTileIds:stringIdArray, disabledRoleIds:stringIdArray, customRoles:{ type:'array', items:{ type:'object', additionalProperties:true } }, isOya:{ type:'boolean' } }, additionalProperties:false },
+        AnalysisTile:analysisTile,
+        AnalysisRole:roleResult,
+        AnalysisInput:normalizedInput,
+        WaitWinningTile:{ type:'object', required:['tile','isJunkara'], properties:{ tile:{ $ref:'#/components/schemas/AnalysisTile' }, isJunkara:{ type:'boolean' } }, additionalProperties:false },
+        WaitGroup:{ type:'object', required:['totalScore','matchedRoles','winningTiles'], properties:{ totalScore:{ type:'integer' }, matchedRoles:{ type:'array', items:{ $ref:'#/components/schemas/AnalysisRole' } }, winningTiles:{ type:'array', items:{ $ref:'#/components/schemas/WaitWinningTile' } } }, additionalProperties:false },
+        Waits:{ type:'object', required:['availableCount','totalCount','groups'], properties:{ availableCount:{ type:'integer' }, totalCount:{ type:'integer' }, groups:{ type:'array', items:{ $ref:'#/components/schemas/WaitGroup' } } }, additionalProperties:false },
+        CurrentHand:{ type:'object', required:['canAgari','reason','totalScore','matchedRoles'], properties:{ canAgari:{ type:'boolean' }, reason:{ type:['string','null'] }, totalScore:{ type:'integer' }, matchedRoles:{ type:'array', items:{ $ref:'#/components/schemas/AnalysisRole' } } }, additionalProperties:false },
+        DiscardWinningTile:{ type:'object', required:['tile','finalHandTileIds','totalScore','matchedRoles','isJunkara'], properties:{ tile:{ $ref:'#/components/schemas/AnalysisTile' }, finalHandTileIds:stringIdArray, totalScore:{ type:'integer' }, matchedRoles:{ type:'array', items:{ $ref:'#/components/schemas/AnalysisRole' } }, isJunkara:{ type:'boolean' } }, additionalProperties:false },
+        DiscardCandidate:{ type:'object', required:['discardTile','handAfterDiscardTileIds','seriesComposition','availableWinningTileCount','isJunkara','winningTiles'], properties:{ discardTile:{ $ref:'#/components/schemas/AnalysisTile' }, handAfterDiscardTileIds:stringIdArray, seriesComposition:{ type:'array', items:{ type:'object', additionalProperties:true } }, availableWinningTileCount:{ type:'integer' }, isJunkara:{ type:'boolean' }, winningTiles:{ type:'array', items:{ $ref:'#/components/schemas/DiscardWinningTile' } } }, additionalProperties:false },
+        AnalysisWaitsResponse:{ type:'object', required:['schemaVersion','ok','input','waits','errors'], properties:{ schemaVersion, ok:{ const:true }, input:{ $ref:'#/components/schemas/AnalysisInput' }, waits:{ $ref:'#/components/schemas/Waits' }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
+        AnalysisDiscardResponse:{ type:'object', required:['schemaVersion','ok','input','currentHand','discardCandidates','errors'], properties:{ schemaVersion, ok:{ const:true }, input:{ $ref:'#/components/schemas/AnalysisInput' }, currentHand:{ $ref:'#/components/schemas/CurrentHand' }, discardCandidates:{ type:'array', items:{ $ref:'#/components/schemas/DiscardCandidate' } }, errors:{ type:'array', items:{ $ref:'#/components/schemas/ErrorItem' } } }, additionalProperties:false },
+        AnalysisResponse:{ oneOf:[{ $ref:'#/components/schemas/AnalysisWaitsResponse' }, { $ref:'#/components/schemas/AnalysisDiscardResponse' }, { $ref:'#/components/schemas/ErrorResponse' }] }
       }
     }
   };
